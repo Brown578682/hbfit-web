@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/* ── CSS custom properties ─────────────────────────────────────────────────── */
+:root {
+  --background: #000000;
+  --foreground: #ffffff;
+  /* Font variables — injected by next/font in layout.tsx */
+  --font-montserrat: '';
+  --font-lora: '';
+  --font-inter: '';
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+}
+
+/* ── Font utility classes ──────────────────────────────────────────────────── */
+.font-montserrat {
+  font-family: var(--font-montserrat), sans-serif;
+}
+
+.font-lora {
+  font-family: var(--font-lora), serif;
+}
+
+/* ── Base body styles ──────────────────────────────────────────────────────── */
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
+}
+
+/* ── Text selection highlight ──────────────────────────────────────────────── */
+::selection {
+  background: #ffffff;
+  color: #000000;
+}
+
+/* ── Scrollbar styling (WebKit) ────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #09090b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-color: #3f3f46 #09090b;
+  scrollbar-width: thin;
+}
+
+/* ── Marquee animation (ticker strip) ─────────────────────────────────────── */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 20s linear infinite;
+}

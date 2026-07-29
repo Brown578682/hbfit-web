@@ -128,7 +128,7 @@ export default function HomePage() {
           {/* Stats bar */}
           <div className="border border-zinc-800 bg-zinc-900/50 grid grid-cols-3 divide-x divide-zinc-800 mb-10">
             {[
-              { stat: '200+', label: 'Members Strong' },
+              { stat: 'Founded', label: '2024' },
               { stat: '4.9 ★', label: 'Google Rating' },
               { stat: 'Veteran', label: 'Owned & Operated' },
             ].map(({ stat, label }) => (

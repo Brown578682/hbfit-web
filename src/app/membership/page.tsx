@@ -119,13 +119,20 @@ export default function MembershipPage() {
     <div className="pt-16 bg-black text-white">
 
       {/* ── Header ────────────────────────────────────────── */}
-      <section className="bg-zinc-950 border-b border-white/10 py-14 px-4 text-center">
-        <p className="text-white/40 uppercase tracking-widest text-xs font-medium mb-3">Join the Mission</p>
-        <h1 className="font-montserrat text-5xl font-extrabold text-white uppercase">Membership</h1>
-        <div className="w-12 h-0.5 bg-white mx-auto mt-5 mb-5" />
-        <p className="text-white/50 text-sm max-w-lg mx-auto leading-relaxed">
-          No long-term contracts. No hidden fees. Simple pricing — because you have enough to worry about.
-        </p>
+      <section
+        className="relative border-b border-white/10 py-20 px-4 text-center overflow-hidden"
+        style={{ backgroundImage: "url('/images/community-photo.jpg')", backgroundSize: 'cover', backgroundPosition: 'center 30%' }}
+      >
+        {/* Dark overlay */}
+        <div className="absolute inset-0 bg-black/70" />
+        <div className="relative z-10">
+          <p className="text-white/60 uppercase tracking-widest text-xs font-medium mb-3">Join the Mission</p>
+          <h1 className="font-montserrat text-5xl font-extrabold text-white uppercase">Membership</h1>
+          <div className="w-12 h-0.5 bg-white mx-auto mt-5 mb-5" />
+          <p className="text-white/60 text-sm max-w-lg mx-auto leading-relaxed">
+            No long-term contracts. No hidden fees. Simple pricing — because you have enough to worry about.
+          </p>
+        </div>
       </section>
 
       {/* ── All Plans ─────────────────────────────────────── */}

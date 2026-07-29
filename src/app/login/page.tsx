@@ -43,7 +43,7 @@ function LoginForm() {
         <div className="text-center mb-10">
           <Image src="/images/logo.png" alt="Honor Bound FIT" width={140} height={40} className="h-10 w-auto mx-auto mb-6" />
           <h1 className="font-montserrat font-black text-2xl uppercase tracking-wide text-white">Member Login</h1>
-          <p className="text-white/40 text-sm mt-2">Access your dashboard and training history.</p>
+          <p className="text-white/40 text-sm mt-2">Access your Member Profile.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

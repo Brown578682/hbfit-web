@@ -241,7 +241,7 @@ export default function OnboardingPage() {
           {step === 1 && (
             <div className="space-y-6">
               <h1 className="font-montserrat text-4xl font-extrabold uppercase tracking-tight leading-tight">
-                Welcome Aboard, Soldier.
+                Welcome Aboard, Warrior.
               </h1>
               <p className="text-zinc-300 leading-relaxed">
                 You&apos;ve committed to a powerful 90-day journey — not just to change your body,

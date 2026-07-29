@@ -42,7 +42,7 @@ export default function DashboardPage() {
   const [baselinePending, setBaselinePending] = useState(false);
   const [hasPin, setHasPin] = useState(true);
 
-  const firstName = session?.user?.name?.split(" ")[0] ?? "Soldier";
+  const firstName = session?.user?.name?.split(" ")[0] ?? "Warrior";
 
   useEffect(() => {
     // Check onboarding status

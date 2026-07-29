@@ -649,9 +649,9 @@ const militarySubcategories: SportSubcategory[] = [
     label: "National Guard / Reserves",
     emoji: "🏛️",
     goals: [
-      { id: "ng1", title: "Pass the ACFT before your next drill weekend", description: "Reserve component soldiers are held to the same standard — be ready every time.", targetValue: 60, unit: "pts" },
+      { id: "ng1", title: "Pass the ACFT before your next drill weekend", description: "Reserve component warriors are held to the same standard — be ready every time.", targetValue: 60, unit: "pts" },
       { id: "ng2", title: "Maintain ACFT passing scores between deployments", description: "Fitness doesn't take a break between orders — neither should you." },
-      { id: "ng3", title: "Score 80+ on all ACFT events as a reservist", description: "Above-average fitness as a part-time soldier — it takes more discipline, not less." },
+      { id: "ng3", title: "Score 80+ on all ACFT events as a reservist", description: "Above-average fitness as a part-time warrior — it takes more discipline, not less." },
       { id: "ng4", title: "Complete a physical prep program before annual training (AT)", description: "Show up to AT in the best shape of your life — not the worst." },
       { id: "ng5", title: "Run 2 miles in under 16 minutes between drill weekends", description: "Keep the aerobic base alive between obligations — 3 runs per week minimum.", unit: "min", targetValue: 16 },
       { id: "ng6", title: "Maintain bodyweight standards year-round", description: "Body composition is a readiness issue — track and manage it consistently." },

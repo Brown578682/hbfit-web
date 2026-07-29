@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 // GET /api/member/goals
 export async function GET() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const member = await prisma.member.findUnique({ where: { userId: session.user.id } });
@@ -21,7 +21,7 @@ export async function GET() {
 
 // POST /api/member/goals — save selected goal suggestions (bulk upsert)
 export async function POST(req: NextRequest) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const member = await prisma.member.findUnique({ where: { userId: session.user.id } });
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/member/goals — remove a goal
 export async function DELETE(req: NextRequest) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const member = await prisma.member.findUnique({ where: { userId: session.user.id } });

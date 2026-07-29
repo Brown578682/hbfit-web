@@ -8,7 +8,7 @@ import { hashPin, verifyPin } from "@/lib/memberCode";
  * Returns { memberCode, hasPin } for the authenticated member.
  */
 export async function GET() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -33,7 +33,7 @@ export async function GET() {
  * Sets or changes the member's 4-digit kiosk PIN.
  */
 export async function POST(req: NextRequest) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -209,7 +209,7 @@ export default function HomePage() {
             <p className="text-white/40 uppercase tracking-widest text-xs font-medium mb-2">In Their Memory</p>
             <h2 className="font-montserrat text-3xl font-bold text-white uppercase mb-4">The Hero Tree</h2>
             <p className="text-white/60 leading-relaxed font-lora">
-              We honor those who gave everything — fallen Marines, soldiers, law enforcement officers, and first responders with ties to our community and our mission.
+              We honor those who gave everything — fallen Marines, warriors, law enforcement officers, and first responders with ties to our community and our mission.
             </p>
           </div>
           <Link href="/hero-tree" className="border border-white/30 text-white font-bold text-sm uppercase tracking-widest px-8 py-4 hover:border-white hover:bg-white/5 transition-colors whitespace-nowrap">

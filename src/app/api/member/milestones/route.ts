@@ -5,7 +5,7 @@ import { sendPushToUser } from "@/lib/push";
 
 // GET /api/member/milestones — this member's milestones
 export async function GET() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const member = await prisma.member.findUnique({ where: { userId: session.user.id } });
@@ -22,7 +22,7 @@ export async function GET() {
 
 // POST /api/member/milestones — log a new PR or custom milestone
 export async function POST(req: NextRequest) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const member = await prisma.member.findUnique({ where: { userId: session.user.id } });

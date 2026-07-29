@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { auth } from '@/lib/auth'
+import { getSession } from '@/lib/session'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   const end = searchParams.get('end') || new Date(Date.now() + 14 * 86400000).toISOString()
   const coachOnly = searchParams.get('mine') === 'true'
 
-  const session = await auth()
+  const session = await getSession()
   const isDev = process.env.NODE_ENV === 'development'
   let staffId: string | undefined
   // Admin (or dev) can pass an explicit staffId to view any coach's sessions

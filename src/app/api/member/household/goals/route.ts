@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
  * Returns goals for all members in the same household (excluding the caller).
  */
 export async function GET() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const member = await prisma.member.findUnique({

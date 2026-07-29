@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 // POST /api/push/subscribe — save or update a push subscription
 export async function POST(req: NextRequest) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { endpoint, keys } = await req.json();
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/push/subscribe — remove subscription for this device
 export async function DELETE(req: NextRequest) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { endpoint } = await req.json();

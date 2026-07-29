@@ -5,7 +5,7 @@ import { sendPushToCoaches } from "@/lib/push";
 
 // GET /api/member/checkins — fetch this member's journey check-ins
 export async function GET() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const member = await prisma.member.findUnique({ where: { userId: session.user.id } });
@@ -21,7 +21,7 @@ export async function GET() {
 
 // POST /api/member/checkins — member submits their portion of a check-in
 export async function POST(req: NextRequest) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const member = await prisma.member.findUnique({

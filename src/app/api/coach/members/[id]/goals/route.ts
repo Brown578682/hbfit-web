@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { auth } from '@/lib/auth'
+import { getSession } from '@/lib/session'
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const session = await auth()
+  const session = await getSession()
   const user = session?.user ? await prisma.user.findUnique({ where: { email: session.user.email! }, include: { staff: true } }) : null
 
   const { title, description, targetDate } = await req.json()

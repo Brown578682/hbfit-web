@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 // GET /api/member/core-metrics?limit=10
 export async function GET(req: NextRequest) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const member = await prisma.member.findUnique({ where: { userId: session.user.id } });
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/member/core-metrics
 export async function POST(req: NextRequest) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const member = await prisma.member.findUnique({ where: { userId: session.user.id } });

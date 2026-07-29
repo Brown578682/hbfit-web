@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
  * Returns { preferredCoachId, coach } for the authenticated member.
  */
 export async function GET() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -40,7 +40,7 @@ export async function GET() {
  * Saves the member's preferred coach (Staff.id) or clears it.
  */
 export async function PUT(req: NextRequest) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { preferredCoachId } = await req.json() as { preferredCoachId?: string };

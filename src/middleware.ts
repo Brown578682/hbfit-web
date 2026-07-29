@@ -22,7 +22,10 @@ export async function middleware(req: NextRequest) {
         secret: secret!,
         salt: cookieName,
       })
-    } catch {}
+    } catch {
+      // Decode failed — fail open so we don't redirect-loop
+      token = null
+    }
   }
 
   const isLoggedIn = !!token

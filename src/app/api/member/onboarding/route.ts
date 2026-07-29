@@ -5,7 +5,7 @@ import { sendPushToUser } from "@/lib/push";
 
 // GET /api/member/onboarding — fetch this member's onboarding record
 export async function GET() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const member = await prisma.member.findUnique({
@@ -19,7 +19,7 @@ export async function GET() {
 
 // PUT /api/member/onboarding — save onboarding progress (upsert per-step)
 export async function PUT(req: NextRequest) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const member = await prisma.member.findUnique({ where: { userId: session.user.id } });

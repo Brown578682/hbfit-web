@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 // GET /api/coach/members/[id]/core-metrics
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id: memberId } = await params;
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 // POST /api/coach/members/[id]/core-metrics — coach records an assessment
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const staff = await prisma.staff.findUnique({ where: { userId: session.user.id } });

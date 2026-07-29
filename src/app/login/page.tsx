@@ -1,6 +1,5 @@
 'use client'
 import { useState, Suspense } from 'react'
-import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -23,17 +22,42 @@ function LoginForm() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const result = await signIn('credentials', {
-      email,
-      password,
-      redirect: false,
-    })
-    if (result?.error) {
-      setError('Invalid email or password.')
+
+    try {
+      // Get CSRF token
+      const csrfRes = await fetch('/api/auth/csrf')
+      const { csrfToken } = await csrfRes.json()
+
+      // POST credentials
+      const res = await fetch('/api/auth/callback/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          email,
+          password,
+          csrfToken,
+          callbackUrl: '/dashboard',
+          json: 'true',
+        }),
+        redirect: 'follow',
+      })
+
+      if (res.ok || res.redirected) {
+        const from = searchParams.get('from')
+        router.push(from === 'admin' ? '/admin' : '/dashboard')
+        router.refresh()
+      } else {
+        const text = await res.text()
+        if (text.includes('CredentialsSignin') || res.status === 401) {
+          setError('Invalid email or password.')
+        } else {
+          setError('Sign in failed. Please try again.')
+        }
+        setLoading(false)
+      }
+    } catch {
+      setError('Network error. Please try again.')
       setLoading(false)
-    } else {
-      const from = searchParams.get('from')
-      router.push(from === 'admin' ? '/admin' : '/dashboard')
     }
   }
 

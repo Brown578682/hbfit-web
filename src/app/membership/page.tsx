@@ -121,7 +121,7 @@ export default function MembershipPage() {
       {/* ── Header ────────────────────────────────────────── */}
       <section
         className="relative border-b border-white/10 py-20 px-4 text-center overflow-hidden"
-        style={{ backgroundImage: "url('/images/community-photo.jpg')", backgroundSize: 'cover', backgroundPosition: 'center 30%' }}
+        style={{ backgroundImage: "url('/images/community-photo.jpg')", backgroundSize: 'cover', backgroundPosition: 'center 75%' }}
       >
         {/* Dark overlay */}
         <div className="absolute inset-0 bg-black/70" />

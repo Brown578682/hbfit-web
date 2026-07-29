@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Loader2, AlertCircle } from 'lucide-react'
+import { loginAction } from '@/app/actions/auth'
 
 function LoginForm() {
   const router = useRouter()
@@ -24,39 +25,17 @@ function LoginForm() {
     setError('')
 
     try {
-      // Get CSRF token
-      const csrfRes = await fetch('/api/auth/csrf')
-      const { csrfToken } = await csrfRes.json()
-
-      // POST credentials
-      const res = await fetch('/api/auth/callback/credentials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          email,
-          password,
-          csrfToken,
-          callbackUrl: '/dashboard',
-          json: 'true',
-        }),
-        redirect: 'follow',
-      })
-
-      if (res.ok || res.redirected) {
+      const result = await loginAction(email, password)
+      if (result?.error) {
+        setError(result.error)
+        setLoading(false)
+      } else {
         const from = searchParams.get('from')
         router.push(from === 'admin' ? '/admin' : '/dashboard')
         router.refresh()
-      } else {
-        const text = await res.text()
-        if (text.includes('CredentialsSignin') || res.status === 401) {
-          setError('Invalid email or password.')
-        } else {
-          setError('Sign in failed. Please try again.')
-        }
-        setLoading(false)
       }
     } catch {
-      setError('Network error. Please try again.')
+      setError('Sign in failed. Please try again.')
       setLoading(false)
     }
   }

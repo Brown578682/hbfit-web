@@ -1,12 +1,32 @@
-import { auth } from '@/lib/auth'
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { decode } from 'next-auth/jwt'
 
 export async function middleware(req: NextRequest) {
   const { nextUrl } = req
-  const session = await auth()
-  const isLoggedIn = !!session?.user
-  const userRole = (session?.user as any)?.role as string | undefined
+
+  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET
+  const isProd = process.env.NODE_ENV === 'production'
+
+  // NextAuth v5 cookie name
+  const cookieName = isProd
+    ? '__Secure-authjs.session-token'
+    : 'authjs.session-token'
+
+  const cookieValue = req.cookies.get(cookieName)?.value
+
+  let token: any = null
+  if (cookieValue) {
+    try {
+      token = await decode({
+        token: cookieValue,
+        secret: secret!,
+        salt: cookieName,
+      })
+    } catch {}
+  }
+
+  const isLoggedIn = !!token
+  const userRole = token?.role as string | undefined
 
   // /admin — ADMIN only
   if (nextUrl.pathname.startsWith('/admin')) {

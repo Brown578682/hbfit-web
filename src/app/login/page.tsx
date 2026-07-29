@@ -1,10 +1,9 @@
 'use client'
 import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
-import Image from 'next/image'
+import NextLink from 'next/link'
+import NextImage from 'next/image'
 import { Loader2, AlertCircle } from 'lucide-react'
-import { loginAction } from '@/app/actions/auth'
 
 function LoginForm() {
   const router = useRouter()
@@ -25,17 +24,22 @@ function LoginForm() {
     setError('')
 
     try {
-      const result = await loginAction(email, password)
-      if (result?.error) {
-        setError(result.error)
-        setLoading(false)
-      } else {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+
+      if (res.ok) {
         const from = searchParams.get('from')
         router.push(from === 'admin' ? '/admin' : '/dashboard')
         router.refresh()
+      } else {
+        setError('Invalid email or password.')
+        setLoading(false)
       }
     } catch {
-      setError('Sign in failed. Please try again.')
+      setError('Network error. Please try again.')
       setLoading(false)
     }
   }
@@ -44,7 +48,7 @@ function LoginForm() {
     <div className="pt-16 min-h-screen bg-black flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
-          <Image src="/images/logo.png" alt="Honor Bound FIT" width={140} height={40} className="h-10 w-auto mx-auto mb-6" />
+          <NextImage src="/images/logo.png" alt="Honor Bound FIT" width={140} height={40} className="h-10 w-auto mx-auto mb-6" />
           <h1 className="font-montserrat font-black text-2xl uppercase tracking-wide text-white">Member Login</h1>
           <p className="text-white/40 text-sm mt-2">Access your Member Profile.</p>
         </div>
@@ -88,9 +92,9 @@ function LoginForm() {
 
         <div className="mt-8 text-center space-y-3">
           <p className="text-white/30 text-xs">Not a member yet?</p>
-          <Link href="/join" className="text-white text-sm underline underline-offset-2 hover:text-white/70 transition-colors">
+          <NextLink href="/join" className="text-white text-sm underline underline-offset-2 hover:text-white/70 transition-colors">
             Join Honor Bound FIT →
-          </Link>
+          </NextLink>
         </div>
       </div>
     </div>

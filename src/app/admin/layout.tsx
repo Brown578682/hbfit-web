@@ -6,14 +6,18 @@ import {
   CalendarDays,
   BarChart3,
   Shield,
+  ShieldCheck,
+  MessageSquare,
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { label: "Members",   href: "/admin/members",  icon: Users },
-  { label: "Check-in",  href: "/admin/checkin",  icon: ScanLine },
-  { label: "Billing",   href: "/admin/billing",  icon: CreditCard },
-  { label: "Classes",   href: "/admin/classes",  icon: CalendarDays },
-  { label: "Reports",   href: "/admin/reports",  icon: BarChart3 },
+  { label: "Members",       href: "/admin/members",  icon: Users },
+  { label: "Check-in",      href: "/admin/checkin",  icon: ScanLine },
+  { label: "GAP Approvals", href: "/admin/gap",       icon: ShieldCheck },
+  { label: "Messages",      href: "/admin/messages",  icon: MessageSquare },
+  { label: "Billing",       href: "/admin/billing",  icon: CreditCard },
+  { label: "Classes",       href: "/admin/classes",  icon: CalendarDays },
+  { label: "Reports",       href: "/admin/reports",  icon: BarChart3 },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

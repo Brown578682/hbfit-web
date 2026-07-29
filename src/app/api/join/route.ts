@@ -2,21 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
+import { prisma } from '@/lib/prisma';
+import { MEMBERSHIP_PLANS, STRIPE_PRICE_SITG_DONATION } from '@/lib/plans';
+import { generateMemberCode } from '@/lib/memberCode';
+import { sendGapPendingEmail, sendAdminGapNotification } from '@/lib/email';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-06-24.dahlia' });
+export const runtime = 'nodejs';
 
-// Plan slug → Stripe price ID mapping (set these in your Stripe dashboard + env vars)
-const PLAN_PRICE_MAP: Record<string, string> = {
-  'individual':         process.env.STRIPE_PRICE_INDIVIDUAL         ?? 'price_individual_placeholder',
-  'couple':             process.env.STRIPE_PRICE_COUPLE             ?? 'price_couple_placeholder',
-  'family':             process.env.STRIPE_PRICE_FAMILY             ?? 'price_family_placeholder',
-  'individual-gap':     process.env.STRIPE_PRICE_INDIVIDUAL_GAP     ?? 'price_individual_gap_placeholder',
-  'couple-gap':         process.env.STRIPE_PRICE_COUPLE_GAP         ?? 'price_couple_gap_placeholder',
-  'family-gap':         process.env.STRIPE_PRICE_FAMILY_GAP         ?? 'price_family_gap_placeholder',
-};
-
-function isGapPlan(slug: string): boolean {
-  return slug.endsWith('-gap');
+let _stripe: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!_stripe) {
+    if (!process.env.STRIPE_SECRET_KEY) throw new Error('STRIPE_SECRET_KEY is not set');
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-06-24.dahlia' });
+  }
+  return _stripe;
 }
 
 export async function POST(req: NextRequest) {
@@ -36,6 +35,8 @@ export async function POST(req: NextRequest) {
     const zip             = (formData.get('zip')             as string | null)?.trim();
     const householdRaw    = (formData.get('householdMembers') as string | null) ?? '[]';
     const gapDoc          = formData.get('gapDoc') as File | null;
+    const referredByName  = (formData.get('referredByName') as string | null)?.trim() ?? '';
+    const standInTheGap   = formData.get('standInTheGap') === 'true';
 
     // ── Validate required fields ──────────────────────────────────────────────
     if (!planSlug || !firstName || !lastName || !email) {
@@ -45,8 +46,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const priceId = PLAN_PRICE_MAP[planSlug];
-    if (!priceId) {
+    // ── Look up plan from MEMBERSHIP_PLANS ────────────────────────────────────
+    const plan = MEMBERSHIP_PLANS.find(p => p.slug === planSlug);
+    if (!plan) {
       return NextResponse.json(
         { error: `Unknown plan: ${planSlug}` },
         { status: 400 },
@@ -60,8 +62,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid householdMembers JSON' }, { status: 400 });
     }
 
+    // ── Look up referrer by name ──────────────────────────────────────────────
+    let referredById: string | null = null;
+    if (referredByName) {
+      const nameParts = referredByName.split(' ').filter(Boolean);
+      const refFirst = nameParts[0] ?? '';
+      const refLast  = nameParts.slice(1).join(' ');
+      if (refFirst && refLast) {
+        const referrer = await prisma.member.findFirst({
+          where: {
+            firstName: { equals: refFirst, mode: 'insensitive' },
+            lastName:  { equals: refLast,  mode: 'insensitive' },
+            status: 'ACTIVE',
+          },
+          select: { id: true },
+        });
+        referredById = referrer?.id ?? null;
+      }
+    }
+
     // ── Create Stripe customer ────────────────────────────────────────────────
-    const customer = await stripe.customers.create({
+    const customer = await getStripe().customers.create({
       name:  `${firstName} ${lastName}`,
       email: email ?? undefined,
       phone: phone ?? undefined,
@@ -74,13 +95,22 @@ export async function POST(req: NextRequest) {
       },
       metadata: {
         planSlug,
+        firstName:        firstName       ?? '',
+        lastName:         lastName        ?? '',
+        phone:            phone           ?? '',
         dob:              dob             ?? '',
+        address:          address         ?? '',
+        city:             city            ?? '',
+        state:            state           ?? '',
+        zip:              zip             ?? '',
         householdMembers: JSON.stringify(householdMembers),
+        referredById:     referredById    ?? '',
+        referredByName:   referredByName  ?? '',
       },
     });
 
     // ── GAP plan path ─────────────────────────────────────────────────────────
-    if (isGapPlan(planSlug)) {
+    if (plan.isGap) {
       if (!gapDoc) {
         return NextResponse.json(
           { error: 'GAP plans require a verification document (gapDoc)' },
@@ -92,8 +122,8 @@ export async function POST(req: NextRequest) {
       const gapDocsDir = '/tmp/gap-docs';
       await mkdir(gapDocsDir, { recursive: true });
 
-      const buffer  = Buffer.from(await gapDoc.arrayBuffer());
-      const ext     = path.extname(gapDoc.name) || '.bin';
+      const buffer   = Buffer.from(await gapDoc.arrayBuffer());
+      const ext      = path.extname(gapDoc.name) || '.bin';
       const safeName = `${customer.id}-${Date.now()}${ext}`;
       const filePath = path.join(gapDocsDir, safeName);
 
@@ -103,15 +133,75 @@ export async function POST(req: NextRequest) {
       // const s3Key = await uploadToS3(buffer, safeName, gapDoc.type);
 
       // Tag customer as PENDING so staff can review
-      await stripe.customers.update(customer.id, {
+      await getStripe().customers.update(customer.id, {
         metadata: {
           ...customer.metadata,
-          gapStatus:   'PENDING',
-          gapDocPath:  filePath,   // swap for s3Key in production
-          gapDocName:  gapDoc.name,
-          gapDocSize:  String(gapDoc.size),
+          gapStatus:  'PENDING',
+          gapDocPath: filePath,   // swap for s3Key in production
+          gapDocName: gapDoc.name,
+          gapDocSize: String(gapDoc.size),
         },
       });
+
+      // ── Create PENDING member record in DB ────────────────────────────────
+      const dateOfBirth = dob ? new Date(dob) : null;
+      const memberCode  = await generateMemberCode(dateOfBirth);
+
+      const user = await prisma.user.create({
+        data: {
+          email,
+          name: `${firstName} ${lastName}`,
+          role: 'MEMBER',
+        },
+      });
+
+      const member = await prisma.member.create({
+        data: {
+          userId:          user.id,
+          firstName,
+          lastName,
+          phone:           phone           ?? null,
+          dateOfBirth:     dateOfBirth,
+          address:         address         ?? null,
+          city:            city            ?? null,
+          state:           state           ?? null,
+          zip:             zip             ?? null,
+          status:          'PENDING',
+          gapEligible:     true,
+          gapDocumentUrl:  filePath,
+          stripeCustomerId: customer.id,
+          source:          'join-form',
+          memberCode,
+          referredById:    referredById ?? null,
+        },
+      });
+
+      // Create Household if householdMembers provided
+      if (Array.isArray(householdMembers) && householdMembers.length > 0) {
+        const household = await prisma.household.create({
+          data: {
+            name: `${lastName} Household`,
+            monthlyCap: plan.cap,
+          },
+        });
+        await prisma.member.update({
+          where: { id: member.id },
+          data: { householdId: household.id, isHouseholdPrimary: true },
+        });
+      }
+
+      // ── Send GAP emails (non-fatal) ───────────────────────────────────────
+      try {
+        await sendGapPendingEmail({ to: email ?? '', firstName: firstName ?? '', planName: plan.name });
+      } catch (e) { console.error('[join/gap] pending email failed:', e); }
+      try {
+        await sendAdminGapNotification({
+          memberName: `${firstName ?? ''} ${lastName ?? ''}`.trim(),
+          email: email ?? '',
+          planName: plan.name,
+          docPath: filePath,
+        });
+      } catch (e) { console.error('[join/gap] admin notification failed:', e); }
 
       return NextResponse.json(
         {
@@ -126,17 +216,25 @@ export async function POST(req: NextRequest) {
     // ── Standard plan path — create Stripe Checkout session ──────────────────
     const origin = req.headers.get('origin') ?? process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
-    const session = await stripe.checkout.sessions.create({
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      { price: plan.stripePriceId, quantity: 1 },
+    ];
+    if (standInTheGap) {
+      lineItems.push({ price: STRIPE_PRICE_SITG_DONATION, quantity: 1 });
+    }
+
+    const session = await getStripe().checkout.sessions.create({
       mode:       'subscription',
       customer:   customer.id,
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: lineItems,
       success_url: `${origin}/join/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${origin}/join?cancelled=true`,
       subscription_data: {
         metadata: {
-          customerId:  customer.id,
+          customerId:     customer.id,
           planSlug,
-          memberName:  `${firstName} ${lastName}`,
+          memberName:     `${firstName} ${lastName}`,
+          standInTheGap:  standInTheGap ? 'true' : 'false',
         },
       },
       allow_promotion_codes: true,
@@ -144,6 +242,7 @@ export async function POST(req: NextRequest) {
       metadata: {
         customerId: customer.id,
         planSlug,
+        standInTheGap: standInTheGap ? 'true' : 'false',
       },
     });
 

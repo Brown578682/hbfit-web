@@ -20,7 +20,7 @@ const SUBSCRIPTIONS: Subscription[] = [
   {
     id: 1,
     name: "Randy Franklin",
-    plan: "Monthly Unlimited",
+    plan: "Base Membership",
     amount: 150,
     nextBilling: "Aug 15, 2025",
     status: "Active",
@@ -36,7 +36,7 @@ const SUBSCRIPTIONS: Subscription[] = [
   {
     id: 3,
     name: "Tamara Okafor",
-    plan: "Monthly Unlimited",
+    plan: "Base Membership",
     amount: 150,
     nextBilling: "Aug 20, 2025",
     status: "Active",
@@ -60,7 +60,7 @@ const SUBSCRIPTIONS: Subscription[] = [
   {
     id: 6,
     name: "Jasmine Torres",
-    plan: "Monthly Unlimited",
+    plan: "Base Membership",
     amount: 150,
     nextBilling: "Aug 22, 2025",
     status: "Active",
@@ -76,7 +76,7 @@ const SUBSCRIPTIONS: Subscription[] = [
   {
     id: 8,
     name: "Angela Kim",
-    plan: "Monthly Unlimited",
+    plan: "Base Membership",
     amount: 150,
     nextBilling: "Aug 11, 2025",
     status: "Active",
@@ -92,7 +92,7 @@ const SUBSCRIPTIONS: Subscription[] = [
   {
     id: 10,
     name: "Denise Harrington",
-    plan: "Monthly Unlimited",
+    plan: "Base Membership",
     amount: 150,
     nextBilling: "Aug 01, 2025",
     status: "Active",
@@ -107,7 +107,7 @@ const STATUS_STYLES: Record<SubStatus, string> = {
 
 const REVENUE_STATS = [
   {
-    label: "Monthly Recurring Revenue",
+    label: "Recurring Revenue (4-wk)",
     value: "$3,150",
     icon: DollarSign,
     color: "text-green-400",
@@ -224,7 +224,7 @@ export default function BillingPage() {
                   <td className="px-6 py-4 font-lora text-zinc-300 whitespace-nowrap">{s.plan}</td>
                   <td className="px-6 py-4 font-montserrat font-bold text-white whitespace-nowrap">
                     ${s.amount.toLocaleString()}
-                    <span className="text-zinc-600 font-normal text-xs">/mo</span>
+                    <span className="text-zinc-600 font-normal text-xs">/4 wks</span>
                   </td>
                   <td className="px-6 py-4 font-lora text-zinc-400 whitespace-nowrap">
                     {s.nextBilling}

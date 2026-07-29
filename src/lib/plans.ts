@@ -1,5 +1,19 @@
 // Membership plan definitions — single source of truth
-export const MEMBERSHIP_PLANS = [
+export type MembershipPlan = {
+  slug: string;
+  name: string;
+  price: number;
+  addOn: number;
+  cap: number;
+  description: string;
+  isGap: boolean;
+  requiresApproval: boolean;
+  stripePriceId: string;
+  stripeFamilyAddonPriceId?: string;
+  openGymOnly?: boolean;
+};
+
+export const MEMBERSHIP_PLANS: MembershipPlan[] = [
   {
     slug: "base",
     name: "Base Membership",
@@ -9,67 +23,18 @@ export const MEMBERSHIP_PLANS = [
     description: "Full access to all classes and facilities.",
     isGap: false,
     requiresApproval: false,
-    stripePriceId: "price_1TvlxvLg281PLi1sXGjqVF2S",
+    stripePriceId: "price_1TyNW3Amxrz1YL7G3ryHrNhp",
   },
   {
-    slug: "gap-veteran",
-    name: "GAP Program — Veteran",
+    slug: "gap",
+    name: "Guardian Angel Program",
     price: 75_00,
     addOn: 50_00,
     cap: 200_00,
-    description: "For honorably discharged veterans. DD-214 or VA ID required.",
+    description: "Discounted rate for veterans, active duty, first responders, and other qualifying community members.",
     isGap: true,
-    gapCategory: "VETERAN",
     requiresApproval: true,
-    stripePriceId: "price_1TvlxzLg281PLi1svslpa5iN",
-  },
-  {
-    slug: "gap-active",
-    name: "GAP Program — Active Duty / Guard / Reserve",
-    price: 75_00,
-    addOn: 50_00,
-    cap: 200_00,
-    description: "For active duty, National Guard, and Reserve members. CAC or orders required.",
-    isGap: true,
-    gapCategory: "ACTIVE_DUTY",
-    requiresApproval: true,
-    stripePriceId: "price_1Tvly5Lg281PLi1sUE7gt2PP",
-  },
-  {
-    slug: "gap-first-responder",
-    name: "GAP Program — First Responder",
-    price: 75_00,
-    addOn: 50_00,
-    cap: 200_00,
-    description: "For law enforcement, fire, and EMS. Agency ID or badge required.",
-    isGap: true,
-    gapCategory: "FIRST_RESPONDER",
-    requiresApproval: true,
-    stripePriceId: "price_1Tvly9Lg281PLi1s9KylEiZ0",
-  },
-  {
-    slug: "gap-medical",
-    name: "GAP Program — Medical Student",
-    price: 75_00,
-    addOn: 50_00,
-    cap: 200_00,
-    description: "For enrolled medical students. Student ID or enrollment verification required.",
-    isGap: true,
-    gapCategory: "MEDICAL_STUDENT",
-    requiresApproval: true,
-    stripePriceId: "price_1TvlyDLg281PLi1s0P35yWAp",
-  },
-  {
-    slug: "gap-clergy",
-    name: "GAP Program — Clergy",
-    price: 75_00,
-    addOn: 50_00,
-    cap: 200_00,
-    description: "For ordained clergy. Ordination certificate or church letterhead required.",
-    isGap: true,
-    gapCategory: "CLERGY",
-    requiresApproval: true,
-    stripePriceId: "price_1TvlyHLg281PLi1smyL09kw6",
+    stripePriceId: "price_1TyNW4Amxrz1YL7G9yurhMGx",
   },
   {
     slug: "homeschool-heroes",
@@ -80,7 +45,7 @@ export const MEMBERSHIP_PLANS = [
     description: "Tuesday & Thursday 1–2 PM. Structured PE for homeschool families.",
     isGap: false,
     requiresApproval: false,
-    stripePriceId: "price_1TvlyMLg281PLi1swaEgpvXs",
+    stripePriceId: "price_1TyNW4Amxrz1YL7GK5gK2Nhv",
   },
   {
     slug: "tribal-elders",
@@ -91,16 +56,35 @@ export const MEMBERSHIP_PLANS = [
     description: "Programming designed for longevity, mobility, and strength.",
     isGap: false,
     requiresApproval: false,
-    stripePriceId: "price_1TvlyTLg281PLi1sBfbCboFM",
+    stripePriceId: "price_1TyNW5Amxrz1YL7GVJgmzu4L",
   },
-] as const;
+  {
+    slug: "open-gym",
+    name: "Open Gym",
+    price: 35_00,
+    addOn: 35_00,
+    cap: 0,
+    description: "Access during scheduled Open Gym windows only.",
+    isGap: false,
+    requiresApproval: false,
+    openGymOnly: true,
+    stripePriceId: "price_1TyNW5Amxrz1YL7G1ojD4rqg",
+    stripeFamilyAddonPriceId: "price_1TyNW6Amxrz1YL7GKIInzYQN",
+  },
+];
 
-export const STRIPE_PRICE_FAMILY_ADDON = "price_1TvlyXLg281PLi1sj0Z1dJsq";
+export const STRIPE_PRICE_FAMILY_ADDON = "price_1TyNW7Amxrz1YL7GQaoVkMc2";
+export const STRIPE_PRICE_SITG_DONATION = "price_1TyNW7Amxrz1YL7G2qsQ2UON";
 
 export const HOUSEHOLD_CAP_CENTS = 200_00;
 export const FAMILY_ADDON_CENTS = 50_00;
 
-export function calculateHouseholdBilling(memberCount: number, basePriceCents: number): number {
-  const total = basePriceCents + (memberCount - 1) * FAMILY_ADDON_CENTS;
-  return Math.min(total, HOUSEHOLD_CAP_CENTS);
+export function calculateHouseholdBilling(memberCount: number, plan: MembershipPlan): number {
+  if (memberCount <= 1) return plan.price;
+  const total = plan.price + (memberCount - 1) * plan.addOn;
+  return plan.cap > 0 ? Math.min(total, plan.cap) : total;
+}
+
+export function getFamilyAddonPriceId(plan: MembershipPlan): string {
+  return plan.stripeFamilyAddonPriceId ?? STRIPE_PRICE_FAMILY_ADDON;
 }

@@ -5,6 +5,7 @@ import type { NextConfig } from "next";
 const withPWA = require("next-pwa");
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   images: {
     remotePatterns: [
       {
@@ -21,7 +22,9 @@ export default withPWA({
   disable: process.env.NODE_ENV === "development",
   register: true,
   skipWaiting: true,
-  // We ship our own sw.js — tell workbox not to generate one
-  // (remove the line below to let next-pwa auto-generate the SW)
-  // swSrc: "public/sw.js",
+  fallbacks: {
+    document: "/offline",
+  },
+  // Append push notification handlers to the generated service worker
+  swSrc: "public/sw-push.js",
 })(nextConfig);

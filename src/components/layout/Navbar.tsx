@@ -5,15 +5,19 @@ import Image from "next/image";
 import { Menu, X, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Hero Tree is only shown in the nav during December (11) and January (0)
+const month = new Date().getMonth();
+const isHeroTreeSeason = month === 11 || month === 0;
+
 const NAV_LINKS = [
   { href: "/about", label: "About" },
   { href: "/schedule", label: "Schedule" },
   { href: "/membership", label: "Membership" },
   { href: "/events", label: "Events" },
   { href: "/core-values", label: "Core Values" },
-  { href: "/hero-tree", label: "Hero Tree" },
+  ...(isHeroTreeSeason ? [{ href: "/hero-tree", label: "Hero Tree" }] : []),
   { href: "/media", label: "Media" },
-  { href: "/internship", label: "Internship" },
+  { href: "/contact", label: "Contact" },
   { href: "https://guidonfoundation.com", label: "The Guidon Foundation", external: true },
 ];
 

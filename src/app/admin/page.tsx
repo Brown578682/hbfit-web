@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import Link from "next/link";
 import {
   Users,
@@ -7,79 +8,132 @@ import {
   AlertCircle,
   CheckCircle2,
   ArrowRight,
+  ShieldCheck,
 } from "lucide-react";
+import { prisma } from "@/lib/prisma";
+import { MemberStatus } from "@prisma/client";
 
-// ── Mock Data ──────────────────────────────────────────────────────────────────
+// ── Data Fetching ───────────────────────────────────────────────────────────────
 
-const STATS = [
-  {
-    label: "Total Members",
-    value: "34",
-    icon: Users,
-    color: "text-blue-400",
-    bg: "bg-blue-400/10",
-  },
-  {
-    label: "Active Subscriptions",
-    value: "28",
-    icon: Activity,
-    color: "text-green-400",
-    bg: "bg-green-400/10",
-  },
-  {
-    label: "Monthly Revenue",
-    value: "$3,150",
-    icon: DollarSign,
-    color: "text-yellow-400",
-    bg: "bg-yellow-400/10",
-  },
-  {
-    label: "Check-ins Today",
-    value: "12",
-    icon: ScanLine,
-    color: "text-red-400",
-    bg: "bg-red-400/10",
-  },
-];
+async function getDashboardData() {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
 
-const ATTENTION_MEMBERS = [
-  {
-    name: "Richard Lim",
-    issue: "GAP Veteran pending",
-    since: "Jul 20, 2025",
-    plan: "GAP Program",
-  },
-  {
-    name: "Cookie Ainsworth",
-    issue: "GAP Caregiver pending",
-    since: "Jul 19, 2025",
-    plan: "GAP Program",
-  },
-  {
-    name: "Marcus Webb",
-    issue: "GAP First Responder pending",
-    since: "Jul 18, 2025",
-    plan: "GAP Program",
-  },
-];
+  const [
+    totalActiveMembers,
+    pendingGapCount,
+    checkInsToday,
+    pendingMembers,
+    recentCheckIns,
+  ] = await Promise.all([
+    prisma.member.count({ where: { status: MemberStatus.ACTIVE } }),
+    prisma.member.count({
+      where: { gapEligible: true, status: MemberStatus.PENDING },
+    }),
+    prisma.checkIn.count({
+      where: { checkedAt: { gte: todayStart, lte: todayEnd } },
+    }),
+    prisma.member.findMany({
+      where: { status: MemberStatus.PENDING },
+      include: {
+        memberships: {
+          where: { status: "ACTIVE" },
+          include: { plan: { select: { name: true } } },
+          take: 1,
+        },
+      },
+      orderBy: { joinedAt: "asc" },
+      take: 5,
+    }),
+    prisma.checkIn.findMany({
+      take: 10,
+      orderBy: { checkedAt: "desc" },
+      include: {
+        member: { select: { firstName: true, lastName: true } },
+      },
+    }),
+  ]);
 
-const RECENT_CHECKINS = [
-  { name: "Randy Franklin",  time: "9:47 AM", plan: "Monthly Unlimited" },
-  { name: "Brandi Long",     time: "9:33 AM", plan: "Small Group" },
-  { name: "Tamara Okafor",   time: "9:15 AM", plan: "Monthly Unlimited" },
-  { name: "DeShawn Morris",  time: "8:58 AM", plan: "10-Class Pack" },
-  { name: "Heather Valdez",  time: "8:42 AM", plan: "Small Group" },
-];
-
-const QUICK_LINKS = [
-  { label: "Manage Members", href: "/admin/members", icon: Users,        desc: "View, add, and edit member profiles" },
-  { label: "Check-in Kiosk", href: "/admin/checkin", icon: ScanLine,     desc: "Open the member check-in station" },
-  { label: "Billing",        href: "/admin/billing", icon: DollarSign,   desc: "Subscriptions, revenue & payments" },
-];
+  return {
+    totalActiveMembers,
+    pendingGapCount,
+    checkInsToday,
+    pendingMembers,
+    recentCheckIns,
+  };
+}
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-export default function AdminDashboardPage() {
+export default async function AdminDashboardPage() {
+  const {
+    totalActiveMembers,
+    pendingGapCount,
+    checkInsToday,
+    pendingMembers,
+    recentCheckIns,
+  } = await getDashboardData();
+
+  const STATS = [
+    {
+      label: "Total Members",
+      value: totalActiveMembers.toString(),
+      icon: Users,
+      color: "text-blue-400",
+      bg: "bg-blue-400/10",
+    },
+    {
+      label: "Pending GAP",
+      value: pendingGapCount.toString(),
+      icon: ShieldCheck,
+      color: "text-yellow-400",
+      bg: "bg-yellow-400/10",
+    },
+    {
+      label: "Revenue (4-wk)",
+      value: "See Billing",
+      icon: DollarSign,
+      color: "text-green-400",
+      bg: "bg-green-400/10",
+    },
+    {
+      label: "Check-ins Today",
+      value: checkInsToday.toString(),
+      icon: ScanLine,
+      color: "text-red-400",
+      bg: "bg-red-400/10",
+    },
+  ];
+
+  const QUICK_LINKS = [
+    {
+      label: "Manage Members",
+      href: "/admin/members",
+      icon: Users,
+      desc: "View, add, and edit member profiles",
+    },
+    {
+      label: "Check-in Kiosk",
+      href: "/admin/checkin",
+      icon: ScanLine,
+      desc: "Open the member check-in station",
+    },
+    {
+      label: "GAP Approvals",
+      href: "/admin/gap",
+      icon: ShieldCheck,
+      desc: "Review and approve GAP applications",
+    },
+    {
+      label: "Billing",
+      href: "/admin/billing",
+      icon: DollarSign,
+      desc: "Subscriptions, revenue & payments",
+    },
+  ];
+
   return (
     <div className="p-8 space-y-10 max-w-6xl mx-auto">
       {/* Header */}
@@ -88,18 +142,26 @@ export default function AdminDashboardPage() {
           Dashboard
         </h1>
         <p className="font-lora text-zinc-400 mt-1">
-          Welcome back — here&apos;s what&apos;s happening at Honor Bound FIT today.
+          Welcome back — here&apos;s what&apos;s happening at Honor Bound FIT
+          today.
         </p>
       </div>
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {STATS.map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="bg-zinc-900 rounded-xl p-5 border border-zinc-800">
-            <div className={`inline-flex items-center justify-center w-10 h-10 rounded-lg ${bg} mb-4`}>
+          <div
+            key={label}
+            className="bg-zinc-900 rounded-xl p-5 border border-zinc-800"
+          >
+            <div
+              className={`inline-flex items-center justify-center w-10 h-10 rounded-lg ${bg} mb-4`}
+            >
               <Icon className={color} size={20} />
             </div>
-            <p className="font-montserrat font-bold text-2xl text-white">{value}</p>
+            <p className="font-montserrat font-bold text-2xl text-white">
+              {value}
+            </p>
             <p className="font-lora text-zinc-400 text-sm mt-0.5">{label}</p>
           </div>
         ))}
@@ -115,31 +177,52 @@ export default function AdminDashboardPage() {
               Needs Attention
             </h2>
             <span className="ml-auto bg-yellow-400/10 text-yellow-400 text-xs font-montserrat font-semibold px-2 py-0.5 rounded-full">
-              {ATTENTION_MEMBERS.length}
+              {pendingMembers.length}
             </span>
           </div>
           <div className="space-y-3">
-            {ATTENTION_MEMBERS.map((m) => (
-              <div
-                key={m.name}
-                className="flex items-start justify-between gap-3 p-3 bg-zinc-800/60 rounded-lg"
-              >
-                <div>
-                  <p className="font-montserrat font-semibold text-sm text-white">{m.name}</p>
-                  <p className="font-lora text-xs text-yellow-400 mt-0.5">{m.issue}</p>
-                  <p className="font-lora text-xs text-zinc-500 mt-0.5">Since {m.since}</p>
-                </div>
-                <span className="shrink-0 text-xs bg-yellow-400/10 text-yellow-400 font-montserrat font-semibold px-2 py-1 rounded-md">
-                  GAP Pending
-                </span>
-              </div>
-            ))}
+            {pendingMembers.length === 0 ? (
+              <p className="font-lora text-sm text-zinc-500 py-4 text-center">
+                No pending members — all caught up!
+              </p>
+            ) : (
+              pendingMembers.map((m) => {
+                const planName =
+                  m.memberships[0]?.plan?.name ?? "No active plan";
+                const since = new Date(m.joinedAt).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                });
+                return (
+                  <div
+                    key={m.id}
+                    className="flex items-start justify-between gap-3 p-3 bg-zinc-800/60 rounded-lg"
+                  >
+                    <div>
+                      <p className="font-montserrat font-semibold text-sm text-white">
+                        {m.firstName} {m.lastName}
+                      </p>
+                      <p className="font-lora text-xs text-yellow-400 mt-0.5">
+                        {planName}
+                      </p>
+                      <p className="font-lora text-xs text-zinc-500 mt-0.5">
+                        Since {since}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs bg-yellow-400/10 text-yellow-400 font-montserrat font-semibold px-2 py-1 rounded-md">
+                      {m.gapEligible ? "GAP Pending" : "Pending"}
+                    </span>
+                  </div>
+                );
+              })
+            )}
           </div>
           <Link
-            href="/admin/members"
+            href="/admin/gap"
             className="flex items-center gap-1 mt-4 text-xs text-zinc-500 hover:text-white font-montserrat transition-colors"
           >
-            View all members <ArrowRight size={13} />
+            Review GAP applications <ArrowRight size={13} />
           </Link>
         </div>
 
@@ -152,15 +235,37 @@ export default function AdminDashboardPage() {
             </h2>
           </div>
           <div className="space-y-3">
-            {RECENT_CHECKINS.map((c, i) => (
-              <div key={i} className="flex items-center justify-between p-3 bg-zinc-800/60 rounded-lg">
-                <div>
-                  <p className="font-montserrat font-semibold text-sm text-white">{c.name}</p>
-                  <p className="font-lora text-xs text-zinc-500 mt-0.5">{c.plan}</p>
-                </div>
-                <span className="font-montserrat text-xs text-zinc-400">{c.time}</span>
-              </div>
-            ))}
+            {recentCheckIns.length === 0 ? (
+              <p className="font-lora text-sm text-zinc-500 py-4 text-center">
+                No check-ins yet today.
+              </p>
+            ) : (
+              recentCheckIns.map((c) => {
+                const time = new Date(c.checkedAt).toLocaleTimeString("en-US", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true,
+                });
+                return (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between p-3 bg-zinc-800/60 rounded-lg"
+                  >
+                    <div>
+                      <p className="font-montserrat font-semibold text-sm text-white">
+                        {c.member.firstName} {c.member.lastName}
+                      </p>
+                      <p className="font-lora text-xs text-zinc-500 mt-0.5">
+                        via {c.method}
+                      </p>
+                    </div>
+                    <span className="font-montserrat text-xs text-zinc-400">
+                      {time}
+                    </span>
+                  </div>
+                );
+              })
+            )}
           </div>
           <Link
             href="/admin/checkin"
@@ -176,7 +281,7 @@ export default function AdminDashboardPage() {
         <h2 className="font-montserrat font-bold text-base text-white tracking-wide mb-4">
           Quick Actions
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {QUICK_LINKS.map(({ label, href, icon: Icon, desc }) => (
             <Link
               key={href}

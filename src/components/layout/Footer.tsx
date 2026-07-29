@@ -1,6 +1,20 @@
+import NewsletterForm from "@/components/NewsletterForm";
 import Link from "next/link";
 import Image from "next/image";
 // Social icons as inline SVGs (lucide-react doesn't include brand icons)
+
+// Hero Tree is only shown in footer during December (11) and January (0)
+const month = new Date().getMonth();
+const isHeroTreeSeason = month === 11 || month === 0;
+
+const exploreLinks: [string, string][] = [
+  ["/about", "About Us"],
+  ["/schedule", "Schedule"],
+  ["/membership", "Membership"],
+  ["/events", "Events"],
+  ["/core-values", "Core Values"],
+  ...(isHeroTreeSeason ? [["/hero-tree", "Hero Tree"]] as [string, string][] : []),
+];
 
 export function Footer() {
   return (
@@ -14,6 +28,9 @@ export function Footer() {
               Veteran-owned strength &amp; conditioning. Fredericksburg, VA.
             </p>
             <p className="text-white/40 text-xs mt-2">45 Centreport Parkway, Suite 137</p>
+            <p className="text-white/40 text-xs mt-1">
+              <a href="tel:+15407378337" className="hover:text-white/70 transition-colors">(540) 737-8337</a>
+            </p>
             <div className="flex gap-3 mt-4">
               <a href="https://facebook.com/honorboundfit" target="_blank" rel="noopener noreferrer" className="text-white/40 hover:text-white transition-colors" aria-label="Facebook">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
@@ -28,14 +45,7 @@ export function Footer() {
           <div>
             <h4 className="text-white text-sm font-bold uppercase tracking-widest mb-4">Explore</h4>
             <nav className="flex flex-col gap-2">
-              {[
-                ["/about", "About Us"],
-                ["/schedule", "Schedule"],
-                ["/membership", "Membership"],
-                ["/events", "Events"],
-                ["/core-values", "Core Values"],
-                ["/hero-tree", "Hero Tree"],
-              ].map(([href, label]) => (
+              {exploreLinks.map(([href, label]) => (
                 <Link key={href} href={href} className="text-white/50 hover:text-white text-sm transition-colors">
                   {label}
                 </Link>
@@ -51,7 +61,6 @@ export function Footer() {
                 ["/membership#gap", "GAP Program"],
                 ["/membership#homeschool", "Homeschool Heroes"],
                 ["/membership#tribal-elders", "Tribal Elders"],
-                ["/internship", "Internship"],
                 ["https://guidonfoundation.com", "The Guidon Foundation"],
               ].map(([href, label]) => (
                 <Link key={href} href={href} className="text-white/50 hover:text-white text-sm transition-colors">
@@ -65,19 +74,7 @@ export function Footer() {
           <div>
             <h4 className="text-white text-sm font-bold uppercase tracking-widest mb-4">Stay Updated</h4>
             <p className="text-white/50 text-sm mb-3">Join our mission. No spam.</p>
-            <form className="flex gap-2">
-              <input
-                type="email"
-                placeholder="your@email.com"
-                className="flex-1 bg-white/5 border border-white/20 text-white placeholder:text-white/30 text-sm px-3 py-2 focus:outline-none focus:border-white/50"
-              />
-              <button
-                type="submit"
-                className="bg-white text-black text-sm font-bold px-4 py-2 hover:bg-white/90 transition-colors"
-              >
-                GO
-              </button>
-            </form>
+            <NewsletterForm />
           </div>
         </div>
 

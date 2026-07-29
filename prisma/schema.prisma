@@ -6,23 +6,20 @@ datasource db {
   provider = "postgresql"
 }
 
-// ─── AUTH ───────────────────────────────────────────────────────────────────
-
 model Account {
   id                String  @id @default(cuid())
   userId            String
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -32,8 +29,7 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {
@@ -44,81 +40,311 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// ─── USERS & MEMBERS ────────────────────────────────────────────────────────
-
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
   emailVerified DateTime?
   name          String?
   image         String?
+  passwordHash  String?
   role          Role      @default(MEMBER)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  member        Member?
+  sessions      Session[]
+  staff         Staff?
+  pushSubs      PushSubscription[]
+}
 
-  accounts Account[]
-  sessions Session[]
-  member   Member?
-  staff    Staff?
+model Member {
+  id                 String          @id @default(cuid())
+  userId             String          @unique
+  firstName          String
+  lastName           String
+  phone              String?
+  phone2             String?
+  email2             String?
+  dateOfBirth        DateTime?
+  address            String?
+  city               String?
+  state              String?
+  zip                String?
+  gender             String?
+  gymDeskId          String?
+  checkInCode        String?         @unique
+  memberCode         String?         @unique  // 4-digit kiosk ID (MMYY default)
+  memberPinHash      String?                  // bcrypt hash of 4-digit PIN
+  source             String?
+  notes              String?
+  joinedAt           DateTime        @default(now())
+  lastVisit          DateTime?
+  status             MemberStatus    @default(ACTIVE)
+  gapEligible        Boolean         @default(false)
+  gapCategory        GapCategory?
+  gapVerifiedAt      DateTime?
+  gapDocumentUrl     String?
+  gapVerifiedBy      String?
+  stripeCustomerId   String?         @unique
+  householdId        String?
+  isHouseholdPrimary Boolean         @default(false)
+  referredById       String?
+  preferredCoachId   String?
+  referredBy         Member?         @relation("MemberReferrals", fields: [referredById], references: [id])
+  referrals          Member[]        @relation("MemberReferrals")
+  coachNotes         CoachNote[]
+  goals              MemberGoal[]
+  checkIns           CheckIn[]
+  bookings           ClassBooking[]
+  household          Household?      @relation(fields: [householdId], references: [id])
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memberships        Membership[]
+  progress           ProgressEntry[]
+  onboarding         MemberOnboarding?
+  journeyCheckIns    JourneyCheckIn[]
+  milestones         Milestone[]
+  coreMetrics        CoreMetrics[]
+  kioskPurchases     KioskPurchase[]
+  kioskMessages      KioskMessage[]
+
+  @@index([status])
+  @@index([stripeCustomerId])
+  @@index([referredById])
+  @@index([memberCode])
+}
+
+model Household {
+  id         String   @id @default(cuid())
+  name       String
+  createdAt  DateTime @default(now())
+  monthlyCap Int      @default(200)
+  members    Member[]
+}
+
+model MembershipPlan {
+  id               String       @id @default(cuid())
+  name             String
+  slug             String       @unique
+  description      String?
+  monthlyPrice     Int
+  addOnPrice       Int          @default(5000)
+  householdCap     Int          @default(20000)
+  stripePriceId    String?
+  isGap            Boolean      @default(false)
+  isActive         Boolean      @default(true)
+  requiresApproval Boolean      @default(false)
+  sortOrder        Int          @default(0)
+  memberships      Membership[]
+}
+
+model Membership {
+  id                   String             @id @default(cuid())
+  memberId             String
+  planId               String
+  status               SubscriptionStatus @default(ACTIVE)
+  stripeSubscriptionId String?            @unique
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  canceledAt           DateTime?
+  createdAt            DateTime           @default(now())
+  soldBy               String?
+  member               Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  plan                 MembershipPlan     @relation(fields: [planId], references: [id])
+
+  @@index([memberId])
+  @@index([stripeSubscriptionId])
+}
+
+model ClassType {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  color       String         @default("#000000")
+  duration    Int            @default(60)
+  isActive    Boolean        @default(true)
+  sessions    ClassSession[]
+}
+
+model ClassSession {
+  id           String         @id @default(cuid())
+  classTypeId  String
+  instructorId String?
+  startTime    DateTime
+  endTime      DateTime
+  capacity     Int            @default(12)
+  location     String?
+  notes        String?
+  isCanceled   Boolean        @default(false)
+  cancelReason String?
+  bookings     ClassBooking[]
+  classType    ClassType      @relation(fields: [classTypeId], references: [id])
+  instructor   Staff?         @relation(fields: [instructorId], references: [id])
+
+  @@index([startTime])
+}
+
+model ClassBooking {
+  id        String        @id @default(cuid())
+  sessionId String
+  memberId  String
+  status    BookingStatus @default(CONFIRMED)
+  checkedIn Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  member    Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  session   ClassSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, memberId])
+}
+
+model CheckIn {
+  id        String   @id @default(cuid())
+  memberId  String
+  checkedAt DateTime @default(now())
+  method    String   @default("manual")
+  staffId   String?
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId])
+  @@index([checkedAt])
+}
+
+model ProgressEntry {
+  id         String   @id @default(cuid())
+  memberId   String
+  recordedAt DateTime @default(now())
+  weight     Float?
+  bodyFat    Float?
+  chest      Float?
+  waist      Float?
+  hips       Float?
+  bicepL     Float?
+  bicepR     Float?
+  thighL     Float?
+  thighR     Float?
+  benchPress Float?
+  squat      Float?
+  deadlift   Float?
+  pullUps    Int?
+  pushUps    Int?
+  runMile    Float?
+  notes      String?
+  member     Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, recordedAt])
+}
+
+model ProgressPhoto {
+  id       String   @id @default(cuid())
+  memberId String
+  url      String
+  takenAt  DateTime @default(now())
+  angle    String?
+  notes    String?
+
+  @@index([memberId])
+}
+
+model CoachNote {
+  id        String   @id @default(cuid())
+  memberId  String
+  coachId   String
+  content   String
+  isPrivate Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  coach     Staff    @relation(fields: [coachId], references: [id])
+
+  @@index([memberId])
+  @@index([coachId])
+}
+
+model MemberGoal {
+  id          String    @id @default(cuid())
+  memberId    String
+  setByCoach  String?
+  title       String
+  description String?
+  targetDate  DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  member      Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  milestones  Milestone[]
+
+  @@index([memberId])
+}
+
+model Staff {
+  id        String         @id @default(cuid())
+  userId    String         @unique
+  firstName String
+  lastName  String
+  title     String?
+  bio       String?
+  photoUrl  String?
+  isActive  Boolean        @default(true)
+  sessions  ClassSession[]
+  coachNotes CoachNote[]
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Post {
+  id            String       @id @default(cuid())
+  title         String
+  slug          String       @unique
+  content       String
+  excerpt       String?
+  featuredImage String?
+  category      PostCategory
+  status        PostStatus   @default(PUBLISHED)
+  publishedAt   DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([category, status])
+}
+
+model Event {
+  id            String      @id @default(cuid())
+  title         String
+  slug          String      @unique
+  description   String?
+  featuredImage String?
+  startDate     DateTime
+  endDate       DateTime?
+  location      String?
+  externalUrl   String?
+  status        EventStatus @default(PUBLISHED)
+  createdAt     DateTime    @default(now())
+}
+
+model HeroTreeEntry {
+  id       String     @id @default(cuid())
+  name     String
+  slug     String     @unique
+  branch   String?
+  rank     String?
+  hometown String?
+  unit     String?
+  dod      DateTime?
+  content  String
+  photoUrl String?
+  status   PostStatus @default(PUBLISHED)
 }
 
 enum Role {
   MEMBER
   STAFF
+  COACH
   ADMIN
-}
-
-model Member {
-  id              String        @id @default(cuid())
-  userId          String        @unique
-  firstName       String
-  lastName        String
-  phone           String?
-  phone2          String?
-  email2          String?
-  dateOfBirth     DateTime?
-  address         String?
-  city            String?
-  state           String?
-  zip             String?
-  gender          String?
-  gymDeskId       String?       // legacy GymDesk ID for migrated members
-  checkInCode     String?       @unique
-  source          String?       // how they found HBFIT
-  notes           String?       @db.Text
-  joinedAt        DateTime      @default(now())
-  lastVisit       DateTime?
-  status          MemberStatus  @default(ACTIVE)
-
-  // GAP Program verification
-  gapEligible     Boolean       @default(false)
-  gapCategory     GapCategory?
-  gapVerifiedAt   DateTime?
-  gapDocumentUrl  String?       // S3 URL of verification doc
-  gapVerifiedBy   String?       // staff userId who approved
-
-  // Stripe
-  stripeCustomerId String?      @unique
-
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  household       Household?    @relation(fields: [householdId], references: [id])
-  householdId     String?
-  isHouseholdPrimary Boolean    @default(false)
-
-  memberships     Membership[]
-  checkIns        CheckIn[]
-  progress        ProgressEntry[]
-  bookings        ClassBooking[]
-
-  @@index([status])
-  @@index([stripeCustomerId])
 }
 
 enum MemberStatus {
   ACTIVE
   INACTIVE
   SUSPENDED
-  PENDING       // GAP verification pending
+  PENDING
   LEAD
   VISITOR
 }
@@ -132,56 +358,6 @@ enum GapCategory {
   CLERGY
 }
 
-model Household {
-  id        String   @id @default(cuid())
-  name      String   // e.g. "Brown Family"
-  createdAt DateTime @default(now())
-
-  members   Member[]
-  
-  // Billing cap enforcement
-  monthlyCap Int     @default(200) // $200 in dollars
-}
-
-// ─── MEMBERSHIPS & BILLING ──────────────────────────────────────────────────
-
-model MembershipPlan {
-  id                String   @id @default(cuid())
-  name              String   // e.g. "Base Membership"
-  slug              String   @unique
-  description       String?
-  monthlyPrice      Int      // in cents (10000 = $100)
-  addOnPrice        Int      @default(5000) // family add-on per member, cents
-  householdCap      Int      @default(20000) // $200 cap in cents
-  stripePriceId     String?  // Stripe Price ID
-  isGap             Boolean  @default(false)
-  isActive          Boolean  @default(true)
-  requiresApproval  Boolean  @default(false) // GAP plans need staff approval
-  sortOrder         Int      @default(0)
-
-  memberships Membership[]
-}
-
-model Membership {
-  id                  String           @id @default(cuid())
-  memberId            String
-  planId              String
-  status              SubscriptionStatus @default(ACTIVE)
-  stripeSubscriptionId String?         @unique
-  currentPeriodStart  DateTime?
-  currentPeriodEnd    DateTime?
-  cancelAtPeriodEnd   Boolean          @default(false)
-  canceledAt          DateTime?
-  createdAt           DateTime         @default(now())
-  soldBy              String?          // staff userId
-
-  member Member         @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  plan   MembershipPlan @relation(fields: [planId], references: [id])
-
-  @@index([memberId])
-  @@index([stripeSubscriptionId])
-}
-
 enum SubscriptionStatus {
   ACTIVE
   PAST_DUE
@@ -191,151 +367,11 @@ enum SubscriptionStatus {
   UNPAID
 }
 
-// ─── CLASSES & SCHEDULING ───────────────────────────────────────────────────
-
-model ClassType {
-  id          String   @id @default(cuid())
-  name        String   // e.g. "Strength & Conditioning"
-  description String?
-  color       String   @default("#000000") // calendar color
-  duration    Int      @default(60) // minutes
-  isActive    Boolean  @default(true)
-
-  sessions ClassSession[]
-}
-
-model ClassSession {
-  id            String    @id @default(cuid())
-  classTypeId   String
-  instructorId  String?
-  startTime     DateTime
-  endTime       DateTime
-  capacity      Int       @default(12)
-  location      String?
-  notes         String?
-  isCanceled    Boolean   @default(false)
-  cancelReason  String?
-
-  classType   ClassType     @relation(fields: [classTypeId], references: [id])
-  instructor  Staff?        @relation(fields: [instructorId], references: [id])
-  bookings    ClassBooking[]
-
-  @@index([startTime])
-}
-
-model ClassBooking {
-  id         String        @id @default(cuid())
-  sessionId  String
-  memberId   String
-  status     BookingStatus @default(CONFIRMED)
-  checkedIn  Boolean       @default(false)
-  createdAt  DateTime      @default(now())
-
-  session ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  member  Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
-
-  @@unique([sessionId, memberId])
-}
-
 enum BookingStatus {
   CONFIRMED
   WAITLISTED
   CANCELED
   NO_SHOW
-}
-
-// ─── CHECK-IN ───────────────────────────────────────────────────────────────
-
-model CheckIn {
-  id        String   @id @default(cuid())
-  memberId  String
-  checkedAt DateTime @default(now())
-  method    String   @default("manual") // "qr", "manual", "kiosk"
-  staffId   String?
-
-  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
-
-  @@index([memberId])
-  @@index([checkedAt])
-}
-
-// ─── PROGRESS TRACKING ──────────────────────────────────────────────────────
-
-model ProgressEntry {
-  id          String   @id @default(cuid())
-  memberId    String
-  recordedAt  DateTime @default(now())
-  
-  // Body metrics
-  weight      Float?   // lbs
-  bodyFat     Float?   // %
-  
-  // Measurements (inches)
-  chest       Float?
-  waist       Float?
-  hips        Float?
-  bicepL      Float?
-  bicepR      Float?
-  thighL      Float?
-  thighR      Float?
-  
-  // Performance PRs
-  benchPress  Float?
-  squat       Float?
-  deadlift    Float?
-  pullUps     Int?
-  pushUps     Int?
-  runMile     Float?   // minutes
-  
-  notes       String?  @db.Text
-
-  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
-
-  @@index([memberId, recordedAt])
-}
-
-model ProgressPhoto {
-  id         String   @id @default(cuid())
-  memberId   String
-  url        String   // S3 URL
-  takenAt    DateTime @default(now())
-  angle      String?  // "front", "side", "back"
-  notes      String?
-
-  @@index([memberId])
-}
-
-// ─── STAFF ──────────────────────────────────────────────────────────────────
-
-model Staff {
-  id          String   @id @default(cuid())
-  userId      String   @unique
-  firstName   String
-  lastName    String
-  title       String?  // "Head Trainer", "Coach", etc.
-  bio         String?  @db.Text
-  photoUrl    String?
-  isActive    Boolean  @default(true)
-
-  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessions ClassSession[]
-}
-
-// ─── CONTENT ────────────────────────────────────────────────────────────────
-
-model Post {
-  id          String     @id @default(cuid())
-  title       String
-  slug        String     @unique
-  content     String     @db.Text
-  excerpt     String?    @db.Text
-  featuredImage String?
-  category    PostCategory
-  status      PostStatus @default(PUBLISHED)
-  publishedAt DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  @@index([category, status])
 }
 
 enum PostCategory {
@@ -350,36 +386,206 @@ enum PostStatus {
   PUBLISHED
 }
 
-model Event {
-  id          String      @id @default(cuid())
-  title       String
-  slug        String      @unique
-  description String?     @db.Text
-  featuredImage String?
-  startDate   DateTime
-  endDate     DateTime?
-  location    String?
-  externalUrl String?
-  status      EventStatus @default(PUBLISHED)
-  createdAt   DateTime    @default(now())
-}
-
 enum EventStatus {
   DRAFT
   PUBLISHED
   CANCELED
 }
 
-model HeroTreeEntry {
-  id          String   @id @default(cuid())
+// ── Push Notifications ────────────────────────────────────────────────────────
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ── Member Onboarding ─────────────────────────────────────────────────────────
+model MemberOnboarding {
+  id                 String    @id @default(cuid())
+  memberId           String    @unique
+  completedAt        DateTime?
+  currentStep        Int       @default(1)
+  // Intake
+  reasonsForJoining  String?
+  daysPerWeek        Int?
+  preferredDays      String?   // JSON array e.g. ["MON","WED","FRI"]
+  preferredTime      String?   // MORNING | AFTERNOON | EVENING
+  priorTraining      Boolean?
+  priorTrainingNotes String?
+  injuries           String?
+  // Goals
+  whatNotWorking     String?
+  vision90Days       String?
+  whyImportant       String?
+  goalStatement      String?
+  // Nutrition baseline
+  proteinGoalG       Int?
+  waterGoalOz        Int?      @default(100)
+  member             Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+}
+
+// ── 30/60/90 Journey Check-Ins ────────────────────────────────────────────────
+model JourneyCheckIn {
+  id                String          @id @default(cuid())
+  memberId          String
+  type              CheckInType
+  scheduledDate     DateTime
+  memberCompletedAt DateTime?
+  coachCompletedAt  DateTime?
+  // Member self-assessment
+  bigWins           String?
+  areasToImprove    String?
+  effortRating      Int?            // 1-10
+  motivationNote    String?
+  // Metrics snapshot (mirrors ProgressEntry fields)
+  weight            Float?
+  bodyFat           Float?
+  muscleMass        Float?
+  // Upsell flags (coach fills)
+  nutritionProgram  Boolean?
+  mobilityProgram   Boolean?
+  personalTraining  Boolean?
+  coachNotes        String?
+  // Referral captured at Day 30
+  referralName      String?
+  // Social media review captured at Day 60
+  socialReviewUrl   String?
+  // Testimonial captured at Day 90
+  testimonial       String?
+  member            Member          @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId])
+  @@index([scheduledDate])
+}
+
+// ── Milestone / Win Tracker ───────────────────────────────────────────────────
+model Milestone {
+  id          String        @id @default(cuid())
+  memberId    String
+  goalId      String?
+  type        MilestoneType
+  title       String
+  description String?
+  targetValue Float?
+  unit        String?       // "lbs", "%", "reps", etc.
+  achievedAt  DateTime?
+  awardedBy   String?       // staffId if coach-awarded, null if auto
+  createdAt   DateTime      @default(now())
+  member      Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  goal        MemberGoal?   @relation(fields: [goalId], references: [id])
+
+  @@index([memberId])
+}
+
+enum CheckInType {
+  DAY1
+  DAY30
+  DAY60
+  DAY90
+  DAY180
+}
+
+enum MilestoneType {
+  WEIGHT_LOSS_PCT    // % toward weight loss goal
+  WEIGHT_GAIN_PCT    // % toward weight gain goal
+  LIFT_PR            // New personal record on a lift
+  BODY_FAT_PCT       // Body fat % milestone
+  ATTENDANCE         // Consecutive sessions / total visits
+  HABIT              // Coach-awarded habit milestone
+  CUSTOM             // Free-form coach award
+}
+
+// ── Core Metrics (formal assessments) ────────────────────────────────────────
+// One row per evaluation. Linked to a member + optionally to a JourneyCheckIn.
+// Used for onboarding baseline, 90-day, 180-day, and ongoing assessments.
+model CoreMetrics {
+  id            String      @id @default(cuid())
+  memberId      String
+  checkInId     String?     // optional link to the JourneyCheckIn that triggered this
+  assessmentType AssessmentType @default(ONGOING)
+  recordedAt    DateTime    @default(now())
+  recordedBy    String?     // staffId of the coach who recorded it (null = self-reported)
+
+  // ── Demographics (stable / slow-changing) ──────────────────────────────────
+  age           Int?        // years
+  heightIn      Float?      // height in inches (display as ft/in)
+
+  // ── Body Composition ───────────────────────────────────────────────────────
+  weightLbs     Float?      // lbs
+  bodyFatPct    Float?      // %
+
+  // ── Strength — 1RM ────────────────────────────────────────────────────────
+  squatLbs      Float?      // back squat 1RM, lbs
+  benchLbs      Float?      // bench press 1RM, lbs
+  deadliftLbs   Float?      // deadlift 1RM, lbs
+
+  // ── Cardio ────────────────────────────────────────────────────────────────
+  mileSec       Int?        // 1-mile run time, seconds  (display as MM:SS)
+  fourHundredSec Int?       // 400m run time, seconds    (display as MM:SS)
+
+  // ── Baseline WOD ──────────────────────────────────────────────────────────
+  // 500m row → 40 air squats → 30 sit-ups → 20 push-ups (for time) + max pull-up reps
+  wodTimeSec    Int?        // total WOD time, seconds   (display as MM:SS)
+  wodPullUps    Int?        // max pull-up reps immediately after WOD
+
+  notes         String?
+
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, recordedAt])
+  @@index([memberId, assessmentType])
+}
+
+enum AssessmentType {
+  ONBOARDING   // Day 1 intake baseline
+  DAY90        // 90-day formal evaluation
+  DAY180       // 180-day formal evaluation
+  ONGOING      // Coach or member-logged anytime
+}
+
+// ── Kiosk ─────────────────────────────────────────────────────────────────────
+model KioskProduct {
+  id          String          @id @default(cuid())
   name        String
-  slug        String   @unique
-  branch      String?  // "USMC", "Army", "Law Enforcement", etc.
-  rank        String?
-  hometown    String?
-  unit        String?
-  dod         DateTime? // date of death
-  content     String   @db.Text
-  photoUrl    String?
-  status      PostStatus @default(PUBLISHED)
+  description String?
+  priceCents  Int
+  imageUrl    String?
+  inStock     Boolean         @default(true)
+  sortOrder   Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  purchases   KioskPurchase[]
+}
+
+model KioskPurchase {
+  id          String        @id @default(cuid())
+  memberId    String
+  productId   String
+  quantity    Int           @default(1)
+  priceCents  Int           // snapshot at time of purchase
+  purchasedAt DateTime      @default(now())
+  settledAt   DateTime?     // null = tab open / pending payment
+  member      Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  product     KioskProduct  @relation(fields: [productId], references: [id])
+
+  @@index([memberId])
+  @@index([purchasedAt])
+}
+
+model KioskMessage {
+  id         String    @id @default(cuid())
+  memberId   String
+  message    String
+  sentAt     DateTime  @default(now())
+  readAt     DateTime?
+  member     Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId])
+  @@index([sentAt])
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+// Article cards use Link for internal routes
 
 export const metadata: Metadata = {
   title: 'Media | Honor Bound FIT',
@@ -15,7 +16,7 @@ const articles = [
       'An in-depth look at the veteran-founded gym at 45 Centreport Parkway, Suite 137, Fredericksburg, VA—exploring how Honor Bound FIT is building a community around rucking, strength, and shared values.',
     location: '45 Centreport Parkway, Suite 137 · Fredericksburg, VA',
     tag: 'Feature Article',
-    href: '#', // placeholder — no live URL provided
+    href: '/media/fredericksburg-free-press',
   },
   {
     outlet: 'FXBG Food Bank',
@@ -24,7 +25,7 @@ const articles = [
       'Honor Bound FIT joins the Fredericksburg Area Food Bank for a live Q&A around the Ruck Hunger charity event, discussing community impact, the power of rucking, and how fitness can serve a greater purpose.',
     location: 'Fredericksburg, VA',
     tag: 'Live Q&A · 2025',
-    href: '#', // placeholder — no live URL provided
+    href: '/media/fxbg-food-bank-ruck-for-a-cause-2025',
   },
 ]
 
@@ -49,11 +50,9 @@ export default function MediaPage() {
       <section className="py-20 px-6">
         <div className="max-w-5xl mx-auto flex flex-col gap-8">
           {articles.map((article, i) => (
-            <a
+            <Link
               key={i}
               href={article.href}
-              target="_blank"
-              rel="noopener noreferrer"
               className="group bg-zinc-900 border border-zinc-800 rounded-lg p-8 md:p-10 hover:border-zinc-500 hover:bg-zinc-800 transition-all duration-200 flex flex-col gap-4"
             >
               {/* Top row */}
@@ -82,7 +81,7 @@ export default function MediaPage() {
                   Read Article ↗
                 </span>
               </div>
-            </a>
+            </Link>
           ))}
         </div>
       </section>

@@ -1,29 +1,13 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
+import { CORE_VALUES } from '@/lib/coreValues'
 
 export const metadata: Metadata = {
   title: 'About Us | Honor Bound FIT',
   description:
     'Founded by U.S. Marine Corps combat veterans, Honor Bound FIT forges capable, mission-ready individuals—physically, mentally, and morally.',
 }
-
-const coreValues = [
-  'It is the duty of all nations to acknowledge, obey, and be grateful to almighty God.',
-  'The United States Constitution is the greatest political document ever written.',
-  'A man\'s most sacred duty is to protect women and children.',
-  'The obstacle is the way. Growth is found in suffering.',
-  'Children belong to their parents.',
-  'Good Friends have hard conversations.',
-  'Regardless of environment, circumstances, and opposition: individuals are responsible for their own attitudes, behavior, and outcomes.',
-  'Surround yourself with good people who hold you accountable to your values, goals, and commitments.',
-  'Relentlessly pursue the things you suck at until today\'s challenges are tomorrow\'s warm-ups.',
-  'Compare yourself to who you were yesterday, not to who someone else is today.',
-  'Respect is given before it is earned.',
-  'Be useful.',
-  'Treat others not as you wish to be treated, but how they wish to be treated.',
-  'Treat all people like individuals, not obstacles or objectives.',
-]
 
 export default function AboutPage() {
   return (
@@ -122,8 +106,104 @@ export default function AboutPage() {
             </div>
           </div>
 
+          {/* Heather Traves */}
+          <div className="flex flex-col md:flex-row gap-12 items-start mb-20">
+            <div className="w-full md:w-80 flex-shrink-0">
+              <div className="relative aspect-square rounded-lg overflow-hidden border border-zinc-700">
+                <Image
+                  src="/images/Coach-Heather.jpg"
+                  alt="Coach Heather Traves"
+                  fill
+                  className="object-cover object-top"
+                  sizes="(max-width: 768px) 100vw, 320px"
+                />
+              </div>
+            </div>
+            <div className="flex-1">
+              <p className="font-montserrat text-xs tracking-[0.2em] uppercase text-zinc-500 mb-2">
+                Coach
+              </p>
+              <h3 className="font-montserrat font-black text-3xl md:text-4xl uppercase mb-4">
+                Heather Traves
+              </h3>
+              <div className="flex flex-wrap gap-2 mb-6">
+                {['Nutrition & Behavior Change', 'Strength & Conditioning', 'Physique Competition'].map((s) => (
+                  <span
+                    key={s}
+                    className="font-montserrat text-xs uppercase tracking-widest border border-zinc-600 text-zinc-300 px-3 py-1 rounded"
+                  >
+                    {s}
+                  </span>
+                ))}
+              </div>
+              <p className="font-lora text-zinc-400 leading-relaxed mb-4">
+                Heather Traves is a U.S. Marine Corps veteran and health and wellness coach with more than
+                30 years of experience in the fitness industry. Throughout her career, she has remained
+                passionate about studying human performance and helping people become stronger, healthier,
+                and more confident by building habits that create lasting change.
+              </p>
+              <p className="font-lora text-zinc-400 leading-relaxed mb-4">
+                Heather holds a Master of Science in Nutrition and is a NASM Certified Personal Trainer,
+                NASM Certified Behavior Change Specialist, and Certified Integrative Nutrition Health Coach.
+                She also earned her professional status in natural physique competitions and has an extensive
+                background in martial arts — giving her a deep appreciation for the connection between
+                physical strength, mental resilience, and lifelong health.
+              </p>
+              <p className="font-lora text-zinc-400 leading-relaxed">
+                Whether working with someone just beginning their fitness journey or an experienced athlete
+                pursuing new goals, Heather focuses on practical, sustainable strategies that fit real life.
+                Great coaching isn't about demanding perfection — it's about helping people build confidence,
+                develop resilience, and create habits they can maintain long after a program ends.
+              </p>
+            </div>
+          </div>
+
+          {/* Randy Franklin */}
+          <div className="flex flex-col md:flex-row-reverse gap-12 items-start mb-20">
+            <div className="w-full md:w-80 flex-shrink-0">
+              <div className="relative aspect-square rounded-lg overflow-hidden border border-zinc-700">
+                <Image
+                  src="/images/Coach-Randy.jpg"
+                  alt="Coach Randy Franklin"
+                  fill
+                  className="object-cover object-top"
+                  sizes="(max-width: 768px) 100vw, 320px"
+                />
+              </div>
+            </div>
+            <div className="flex-1">
+              <p className="font-montserrat text-xs tracking-[0.2em] uppercase text-zinc-500 mb-2">
+                Coach
+              </p>
+              <h3 className="font-montserrat font-black text-3xl md:text-4xl uppercase mb-4">
+                Randy Franklin
+              </h3>
+              <div className="flex flex-wrap gap-2 mb-6">
+                {['Resistance Training', 'Athletic Performance', 'Corrective Exercise', 'Youth & Senior Fitness', 'Flexibility & Mobility'].map((s) => (
+                  <span
+                    key={s}
+                    className="font-montserrat text-xs uppercase tracking-widest border border-zinc-600 text-zinc-300 px-3 py-1 rounded"
+                  >
+                    {s}
+                  </span>
+                ))}
+              </div>
+              <p className="font-lora text-zinc-400 leading-relaxed">
+                With over 15 years of experience in the fitness industry, Randy Franklin holds multiple
+                certifications, including NASM Certified Personal Trainer (CPT), NASM Corrective Exercise
+                Specialist (CES), and NASM Performance Enhancement Specialist (PES). His diverse clientele
+                ranges from youth and professional athletes to seniors with limited mobility. In both group
+                classes and personal training sessions, he emphasizes resistance training across all planes
+                of motion, tailoring each program to help clients perform at their highest level. His
+                commitment to client success is reflected in the personalized approach he brings to every
+                training program, ensuring each individual receives the guidance and support needed to
+                achieve their goals.
+              </p>
+            </div>
+          </div>
+
           {/* Rich Brown */}
-          <div className="flex flex-col md:flex-row-reverse gap-12 items-start">
+          <div className="flex flex-col md:flex-row gap-12 items-start mb-20">
             <div className="w-full md:w-80 flex-shrink-0">
               <div className="relative aspect-square rounded-lg overflow-hidden border border-zinc-700">
                 <Image
@@ -161,6 +241,7 @@ export default function AboutPage() {
               </p>
             </div>
           </div>
+
         </div>
       </section>
 
@@ -177,7 +258,7 @@ export default function AboutPage() {
             <div className="w-16 h-1 bg-white mx-auto mt-6" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {coreValues.map((value, i) => (
+            {CORE_VALUES.map((value, i) => (
               <div
                 key={i}
                 className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 hover:border-zinc-600 transition-colors duration-200"
@@ -185,7 +266,7 @@ export default function AboutPage() {
                 <span className="font-montserrat font-black text-4xl text-zinc-700 leading-none block mb-3">
                   {String(i + 1).padStart(2, '0')}
                 </span>
-                <p className="font-lora text-zinc-300 text-sm leading-relaxed">{value}</p>
+                <p className="font-lora text-zinc-300 text-sm leading-relaxed">{value.title}</p>
               </div>
             ))}
           </div>

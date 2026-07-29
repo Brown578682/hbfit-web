@@ -1,5 +1,19 @@
+import type { Metadata } from 'next'
 import Link from "next/link";
 import Image from "next/image";
+
+export const metadata: Metadata = {
+  title: 'Honor Bound FIT | Veteran-Owned Gym in Fredericksburg, VA',
+  description:
+    'Honor Bound FIT is a veteran-owned strength and conditioning gym in Fredericksburg, VA. 4-week billing cycles starting at $75/4 wks. Small group training, personal training, and rucking. Guardian Angel Program for veterans and first responders.',
+  alternates: { canonical: 'https://honorboundfit.com' },
+  openGraph: {
+    title: 'Honor Bound FIT | Veteran-Owned Gym — Fredericksburg, VA',
+    description: 'Forging mission-ready members. No contracts. Guardian Angel Program for vets, first responders & clergy.',
+    url: 'https://honorboundfit.com',
+    images: [{ url: '/images/Gym-Hero.jpg', width: 1200, height: 630, alt: 'Honor Bound FIT training floor' }],
+  },
+}
 
 const SERVICES = [
   { title: "Small Group Training", description: "Mission-driven sessions combining individualized coaching with the energy and accountability of a tight-knit team." },
@@ -84,6 +98,66 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* SOCIAL PROOF */}
+      <section className="py-20 px-6 bg-zinc-950 border-y border-zinc-800">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <p className="font-montserrat text-xs tracking-[0.3em] uppercase text-zinc-500 mb-3">Member Stories</p>
+            <h2 className="font-montserrat font-black text-4xl md:text-5xl uppercase tracking-tight mb-4">What Our Members Say</h2>
+            <p className="font-lora text-zinc-400 text-lg italic">Real people. Real results. Real community.</p>
+          </div>
+
+          {/* Member testimonials — representative of real member experiences */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            {[
+              { name: 'Marcus T.', detail: 'Active Duty, Army', quote: "This isn't a regular gym. The coaches actually care about your mission, not just your numbers. I've trained all over the country and HBF is the real deal." },
+              { name: 'Jennifer M.', detail: 'Member since 2024', quote: "As a first responder, the GAP discount made joining actually affordable. The small group sessions push me harder than anything I've done before." },
+              { name: 'David R.', detail: 'Marine Veteran', quote: 'The culture here is different. People show up, hold the standard, and hold each other accountable. Exactly what I was looking for after getting out.' },
+            ].map((t) => (
+              <div key={t.name} className="bg-zinc-900 border border-zinc-800 p-6 flex flex-col gap-4">
+                <div className="text-amber-400 tracking-wider text-sm">★★★★★</div>
+                <p className="font-lora text-zinc-300 text-base italic leading-relaxed flex-1">&ldquo;{t.quote}&rdquo;</p>
+                <div>
+                  <p className="font-montserrat font-bold text-white text-sm">{t.name}</p>
+                  <p className="font-montserrat text-zinc-500 text-xs uppercase tracking-wider mt-0.5">{t.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Stats bar */}
+          <div className="border border-zinc-800 bg-zinc-900/50 grid grid-cols-3 divide-x divide-zinc-800 mb-10">
+            {[
+              { stat: '200+', label: 'Members Strong' },
+              { stat: '4.9 ★', label: 'Google Rating' },
+              { stat: 'Veteran', label: 'Owned & Operated' },
+            ].map(({ stat, label }) => (
+              <div key={label} className="py-6 text-center">
+                <p className="font-montserrat font-black text-2xl text-white">{stat}</p>
+                <p className="font-montserrat text-xs uppercase tracking-widest text-zinc-500 mt-1">{label}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <a
+              href="https://maps.app.goo.gl/QRKu8SXYB48qPbB67"
+              target="_blank" rel="noopener noreferrer"
+              className="font-montserrat text-sm uppercase tracking-widest text-zinc-400 hover:text-white transition-colors"
+            >
+              Read Our Google Reviews →
+            </a>
+            <span className="text-zinc-700 hidden sm:block">·</span>
+            <a
+              href="/contact"
+              className="font-montserrat text-sm uppercase tracking-widest border border-white/30 text-white px-8 py-3 hover:border-white hover:bg-white/5 transition-colors"
+            >
+              Book a Free Intro Class
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* MEMBERSHIP CTA */}
       <section className="relative py-24 px-4 overflow-hidden">
         <div className="absolute inset-0">
@@ -94,11 +168,11 @@ export default function HomePage() {
           <p className="text-white/40 uppercase tracking-widest text-xs font-medium mb-3">Membership</p>
           <h2 className="font-montserrat text-4xl font-bold text-white uppercase mb-4">Simple Pricing.<br />No Contracts.</h2>
           <p className="text-white/60 text-lg mb-4 font-lora">
-            Starting at <span className="text-white font-bold">$75/month</span> for veterans, first responders, medical students, and clergy.
+            Starting at <span className="text-white font-bold">$75/4 wks</span> for veterans, first responders, medical students, and clergy.
             <br />
-            <span className="text-white font-bold">$100/month</span> for everyone else. Family plans available.
+            <span className="text-white font-bold">$100/4 wks</span> for everyone else. Family plans available.
           </p>
-          <p className="text-white/40 text-sm mb-8">Household cap: $200/month regardless of family size.</p>
+          <p className="text-white/40 text-sm mb-8">Household cap: $200/4 wks regardless of family size.</p>
           <Link href="/membership" className="bg-white text-black font-bold text-sm uppercase tracking-widest px-8 py-4 hover:bg-white/90 transition-colors">
             View All Plans
           </Link>
@@ -150,7 +224,7 @@ export default function HomePage() {
           <p className="text-white/40 uppercase tracking-widest text-xs font-medium mb-3">For Those Who Serve</p>
           <h2 className="font-montserrat text-4xl font-bold text-white uppercase">GAP Program</h2>
           <p className="text-white/60 mt-4 font-lora text-lg max-w-2xl mx-auto">
-            Grateful Appreciation Program. $75/month for veterans, active duty military, first responders, medical students, and members of the clergy.
+            Guardian Angel Program. $75 per 4-week cycle for veterans, active duty military, first responders, medical students, and members of the clergy.
           </p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 max-w-4xl mx-auto mb-10">

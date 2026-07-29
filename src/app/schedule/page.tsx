@@ -1,223 +1,399 @@
 "use client";
-import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Users, Clock, MapPin, CheckCircle } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { X, Clock, User, ArrowRight, CalendarDays, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay, isToday, isPast } from "date-fns";
+import { isToday, getDay, startOfWeek, addDays, format } from "date-fns";
+import { getEventsForWeek, type HBFITEvent } from "@/lib/events-data";
 
-const CLASS_COLORS: Record<string, string> = {
-  "Strength & Conditioning": "border-l-white",
-  "Small Group Training": "border-l-zinc-400",
-  "Open Gym": "border-l-zinc-600",
-  "Homeschool Heroes": "border-l-zinc-300",
-  "Tribal Elders": "border-l-zinc-500",
-  "Rucking": "border-l-zinc-400",
-};
-
-// Mock schedule data — will be replaced by API/DB
-const MOCK_CLASSES = [
-  { id: "1", type: "Strength & Conditioning", instructor: "Coach Keith", time: "05:30", duration: 60, capacity: 12, enrolled: 8, days: [1, 2, 3, 4, 5] },
-  { id: "2", type: "Small Group Training", instructor: "Coach Rich", time: "07:00", duration: 60, capacity: 12, enrolled: 6, days: [1, 2, 3, 4, 5] },
-  { id: "3", type: "Open Gym", instructor: null, time: "09:00", duration: 120, capacity: 20, enrolled: 4, days: [1, 2, 3, 4, 5, 6] },
-  { id: "4", type: "Homeschool Heroes", instructor: "Coach Keith", time: "13:00", duration: 60, capacity: 12, enrolled: 7, days: [2, 4] },
-  { id: "5", type: "Tribal Elders", instructor: "Coach Keith", time: "10:00", duration: 60, capacity: 12, enrolled: 3, days: [1, 3, 5] },
-  { id: "6", type: "Strength & Conditioning", instructor: "Coach Rich", time: "17:00", duration: 60, capacity: 12, enrolled: 11, days: [1, 2, 3, 4, 5] },
-  { id: "7", type: "Small Group Training", instructor: "Coach Keith", time: "18:15", duration: 60, capacity: 12, enrolled: 9, days: [1, 2, 3, 4, 5] },
-  { id: "8", type: "Rucking", instructor: "Coach Rich", time: "07:00", duration: 90, capacity: 20, enrolled: 5, days: [6] },
+// 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+const SCHEDULE = [
+  { id: "1", type: "Strength & Conditioning Group Class", instructor: "Heather Traves", time: "5:00 AM",  days: [1, 2, 3, 4, 5] },
+  { id: "2", type: "Strength & Conditioning Group Class", instructor: "Heather Traves", time: "6:00 AM",  days: [1, 2, 3, 4, 5] },
+  { id: "3", type: "Strength & Conditioning Group Class", instructor: "Heather Traves", time: "9:30 AM",  days: [1, 2, 3, 4, 5] },
+  { id: "4", type: "Homeschool Heroes",                  instructor: "Randy Franklin",  time: "1:00 PM",  days: [2, 4] },
+  { id: "5", type: "Strength & Conditioning Group Class", instructor: "Heather Traves", time: "4:00 PM",  days: [1, 2, 3, 4, 5] },
+  { id: "6", type: "Strength & Conditioning Group Class", instructor: "Heather Traves", time: "5:00 PM",  days: [1, 2, 3, 4, 5] },
+  { id: "7", type: "Strength & Conditioning Group Class", instructor: "Randy Franklin",  time: "6:00 PM",  days: [1, 4] },
+  { id: "8", type: "Strength & Conditioning Group Class", instructor: "Randy Franklin",  time: "8:30 AM",  days: [6] },
 ];
 
-function formatTime(time: string) {
-  const [h, m] = time.split(":").map(Number);
-  const period = h >= 12 ? "PM" : "AM";
-  const hour = h % 12 || 12;
-  return `${hour}:${m.toString().padStart(2, "0")} ${period}`;
+const DAYS_OF_WEEK = [
+  { label: "Monday",    short: "MON", dow: 1 },
+  { label: "Tuesday",   short: "TUE", dow: 2 },
+  { label: "Wednesday", short: "WED", dow: 3 },
+  { label: "Thursday",  short: "THU", dow: 4 },
+  { label: "Friday",    short: "FRI", dow: 5 },
+  { label: "Saturday",  short: "SAT", dow: 6 },
+];
+
+type ClassEntry = typeof SCHEDULE[0];
+
+function isDayToday(dow: number) {
+  if (typeof window === "undefined") return false; // SSR: never highlight
+  return getDay(new Date()) === dow;
 }
 
-function ClassCard({ cls, date, isLoggedIn }: { cls: typeof MOCK_CLASSES[0]; date: Date; isLoggedIn: boolean }) {
-  const [booked, setBooked] = useState(false);
-  const spotsLeft = cls.capacity - cls.enrolled;
-  const isFull = spotsLeft === 0;
-  const isPastClass = isPast(new Date(`${format(date, "yyyy-MM-dd")}T${cls.time}`));
+function ClassRow({ cls, onClick }: { cls: ClassEntry; onClick: () => void }) {
+  const isHero = cls.type === "Homeschool Heroes";
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "w-full text-left flex items-center justify-between gap-4 px-5 py-4",
+        "border-b border-white/5 last:border-0",
+        "hover:bg-white/5 active:bg-white/10 transition-colors group"
+      )}
+    >
+      {/* Time */}
+      <div className="w-20 shrink-0">
+        <span className="font-montserrat font-bold text-white text-base tabular-nums">
+          {cls.time}
+        </span>
+      </div>
+
+      {/* Class info */}
+      <div className="flex-1 min-w-0">
+        <div className={cn(
+          "font-montserrat font-bold text-sm uppercase tracking-wide",
+          isHero ? "text-amber-400" : "text-white"
+        )}>
+          {cls.type}
+        </div>
+        <div className="flex items-center gap-1.5 mt-0.5 text-white/50 text-xs">
+          <User size={11} />
+          <span>{cls.instructor}</span>
+        </div>
+      </div>
+
+      {/* Arrow */}
+      <ArrowRight
+        size={16}
+        className="shrink-0 text-white/20 group-hover:text-white/60 group-hover:translate-x-0.5 transition-all"
+      />
+    </button>
+  );
+}
+
+function DetailDrawer({ cls, onClose }: { cls: ClassEntry | null; onClose: () => void }) {
+  if (!cls) return null;
+  const isHero = cls.type === "Homeschool Heroes";
 
   return (
-    <div className={cn(
-      "bg-zinc-900 border-l-2 p-4 hover:bg-zinc-800 transition-colors",
-      CLASS_COLORS[cls.type] || "border-l-zinc-600",
-      isPastClass && "opacity-50"
-    )}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="text-white font-montserrat font-bold text-sm truncate">{cls.type}</div>
-          {cls.instructor && (
-            <div className="text-white/40 text-xs mt-0.5">{cls.instructor}</div>
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      {/* Panel */}
+      <div className="fixed bottom-0 left-0 right-0 md:right-auto md:top-0 md:left-auto md:right-0 md:w-96 z-50 bg-zinc-950 border-t md:border-t-0 md:border-l border-white/10 flex flex-col h-auto md:h-full">
+        {/* Header */}
+        <div className="flex items-start justify-between p-6 border-b border-white/10">
+          <div>
+            <p className="text-white/40 uppercase tracking-widest text-xs mb-1">Class Details</p>
+            <h2 className={cn(
+              "font-montserrat font-extrabold text-xl uppercase leading-tight",
+              isHero ? "text-amber-400" : "text-white"
+            )}>
+              {cls.type}
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-white/40 hover:text-white transition-colors mt-0.5"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 p-6 space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/5 flex items-center justify-center">
+              <Clock size={18} className="text-white/60" />
+            </div>
+            <div>
+              <div className="text-white/40 text-xs uppercase tracking-wider">Time</div>
+              <div className="text-white font-montserrat font-bold text-lg">{cls.time}</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/5 flex items-center justify-center">
+              <User size={18} className="text-white/60" />
+            </div>
+            <div>
+              <div className="text-white/40 text-xs uppercase tracking-wider">Coach</div>
+              <div className="text-white font-montserrat font-bold text-lg">{cls.instructor}</div>
+            </div>
+          </div>
+
+          {isHero && (
+            <div className="bg-amber-400/10 border border-amber-400/20 p-4">
+              <p className="text-amber-400 text-sm leading-relaxed">
+                Homeschool Heroes is a specialized class designed for homeschool families.
+                Contact us to learn more about eligibility and enrollment.
+              </p>
+            </div>
           )}
-          <div className="flex items-center gap-3 mt-2 text-white/50 text-xs">
-            <span className="flex items-center gap-1">
-              <Clock size={11} />
-              {formatTime(cls.time)} · {cls.duration}min
-            </span>
-            <span className="flex items-center gap-1">
-              <Users size={11} />
-              {spotsLeft > 0 ? `${spotsLeft} spots` : "Full"}
-            </span>
+
+          <div className="bg-white/5 p-4">
+            <p className="text-white/60 text-sm leading-relaxed">
+              All classes are 60 minutes. Members may book in advance through their dashboard.
+              Walk-ins welcome based on availability.
+            </p>
           </div>
         </div>
-        {!isPastClass && (
-          isLoggedIn ? (
-            <button
-              onClick={() => setBooked(!booked)}
-              disabled={isFull && !booked}
-              className={cn(
-                "flex-shrink-0 text-xs font-bold uppercase tracking-wide px-3 py-1.5 transition-colors",
-                booked
-                  ? "bg-white/10 text-white/60 border border-white/20"
-                  : isFull
-                  ? "bg-zinc-700 text-zinc-500 cursor-not-allowed"
-                  : "bg-white text-black hover:bg-white/90"
-              )}
-            >
-              {booked ? "Cancel" : isFull ? "Full" : "Book"}
-            </button>
-          ) : (
-            <a href="/login?redirect=/schedule" className="flex-shrink-0 text-xs font-bold uppercase tracking-wide px-3 py-1.5 border border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-colors">
-              Login
-            </a>
-          )
+
+        {/* CTAs */}
+        <div className="p-6 border-t border-white/10 space-y-3">
+          <a
+            href="/login?redirect=/schedule"
+            className="block w-full bg-white text-black font-montserrat font-extrabold uppercase tracking-wide text-sm py-3.5 text-center hover:bg-white/90 transition-colors"
+          >
+            Log In to Book
+          </a>
+          <a
+            href="/join"
+            className="block w-full border border-white/20 text-white font-montserrat font-bold uppercase tracking-wide text-sm py-3 text-center hover:border-white/50 hover:bg-white/5 transition-colors"
+          >
+            Not a Member? Join Now
+          </a>
+        </div>
+      </div>
+    </>
+  );
+}
+
+const CLASS_TYPES = ["All Classes", "Strength & Conditioning Group Class", "Homeschool Heroes"];
+const INSTRUCTORS  = ["All Coaches", "Heather Traves", "Randy Franklin"];
+
+function EventRow({ ev }: { ev: HBFITEvent }) {
+  return (
+    <a
+      href={`/events/${ev.slug}`}
+      className="w-full flex items-center justify-between gap-4 px-5 py-4 border-b border-white/5 last:border-0 hover:bg-sky-950/40 active:bg-sky-900/40 transition-colors group"
+    >
+      {/* Left accent */}
+      <div className="w-1 self-stretch bg-sky-400 shrink-0 rounded-full" />
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className="font-montserrat font-bold text-xs uppercase tracking-widest text-sky-400">
+            Event
+          </span>
+          <span className="text-white/20 text-xs">·</span>
+          <span className="text-white/40 text-xs">{ev.category}</span>
+        </div>
+        <div className="font-montserrat font-bold text-sm text-white truncate">{ev.title}</div>
+        {ev.location && (
+          <div className="flex items-center gap-1 mt-0.5 text-white/40 text-xs">
+            <MapPin size={10} />
+            <span>{ev.location}</span>
+          </div>
         )}
       </div>
-      {booked && (
-        <div className="flex items-center gap-1.5 mt-2 text-green-400 text-xs">
-          <CheckCircle size={12} />
-          <span>Booked</span>
-        </div>
-      )}
+
+      <ArrowRight size={14} className="shrink-0 text-sky-400/40 group-hover:text-sky-400 group-hover:translate-x-0.5 transition-all" />
+    </a>
+  );
+}
+
+
+function FilterPills({
+  options,
+  value,
+  onChange,
+}: {
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((opt) => (
+        <button
+          key={opt}
+          onClick={() => onChange(opt)}
+          className={cn(
+            "px-4 py-1.5 text-xs font-montserrat font-bold uppercase tracking-wide border transition-colors",
+            value === opt
+              ? "bg-white text-black border-white"
+              : "bg-transparent text-white/50 border-white/20 hover:border-white/50 hover:text-white"
+          )}
+        >
+          {opt}
+        </button>
+      ))}
     </div>
   );
 }
 
 export default function SchedulePage() {
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [isLoggedIn] = useState(false); // will wire to session
+  const [selected, setSelected]       = useState<ClassEntry | null>(null);
+  const [classFilter, setClassFilter] = useState("All Classes");
+  const [coachFilter, setCoachFilter] = useState("All Coaches");
 
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  // Compute this week's events once — deferred to client to avoid SSR/client date mismatch
+  const [thisWeekEvents, setThisWeekEvents] = useState<HBFITEvent[]>([]);
+  useEffect(() => {
+    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+    setThisWeekEvents(getEventsForWeek(weekStart));
+  }, []);
 
-  const getClassesForDay = (date: Date) => {
-    const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon...
-    return MOCK_CLASSES
-      .filter(c => c.days.includes(dayOfWeek))
-      .sort((a, b) => a.time.localeCompare(b.time));
+  // Map dow → events that fall on that day
+  const eventsByDow = useMemo(() => {
+    const map: Record<number, HBFITEvent[]> = {};
+    thisWeekEvents.forEach((ev) => {
+      if (!ev.date) return;
+      const d = new Date(ev.date + "T12:00:00");
+      const dow = getDay(d); // 0=Sun … 6=Sat
+      if (!map[dow]) map[dow] = [];
+      map[dow].push(ev);
+    });
+    return map;
+  }, [thisWeekEvents]);
+
+  const matches = (cls: ClassEntry) => {
+    const classOk = classFilter === "All Classes" || cls.type === classFilter;
+    const coachOk = coachFilter === "All Coaches" || cls.instructor === coachFilter;
+    return classOk && coachOk;
   };
 
   return (
     <div className="pt-16 min-h-screen bg-black">
       {/* Header */}
-      <div className="bg-zinc-950 border-b border-white/10 py-10 px-4 text-center">
-        <p className="text-white/40 uppercase tracking-widest text-xs font-medium mb-2">Book Your Session</p>
-        <h1 className="font-montserrat text-4xl font-extrabold text-white uppercase">Schedule</h1>
-        {!isLoggedIn && (
-          <p className="text-white/50 text-sm mt-3">
-            <a href="/login" className="text-white underline underline-offset-2">Log in</a> to book classes.{" "}
-            <a href="/join" className="text-white underline underline-offset-2">Not a member?</a>
-          </p>
-        )}
+      <div className="bg-zinc-950 border-b border-white/10 py-12 px-4 text-center">
+        <p className="text-white/40 uppercase tracking-widest text-xs font-medium mb-2">
+          Honor Bound FIT · Fredericksburg, VA
+        </p>
+        <h1 className="font-montserrat text-4xl font-extrabold text-white uppercase">
+          Class Schedule
+        </h1>
+        <p className="text-white/40 text-sm mt-3">
+          Tap any class to book or learn more.
+        </p>
       </div>
 
-      {/* Week Navigation */}
-      <div className="sticky top-16 z-30 bg-black border-b border-white/10">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="flex items-center justify-between py-3">
-            <button
-              onClick={() => setWeekStart(subWeeks(weekStart, 1))}
-              className="p-2 text-white/50 hover:text-white transition-colors"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <span className="font-montserrat text-white font-bold text-sm uppercase tracking-wide">
-              {format(weekStart, "MMM d")} – {format(addDays(weekStart, 6), "MMM d, yyyy")}
-            </span>
-            <button
-              onClick={() => setWeekStart(addWeeks(weekStart, 1))}
-              className="p-2 text-white/50 hover:text-white transition-colors"
-            >
-              <ChevronRight size={20} />
-            </button>
+      {/* Filters */}
+      <div className="border-b border-white/10 bg-zinc-950">
+        <div className="max-w-2xl mx-auto px-4 py-4 space-y-3">
+          <div>
+            <p className="text-white/30 uppercase tracking-widest text-xs mb-2">Class</p>
+            <FilterPills options={CLASS_TYPES} value={classFilter} onChange={(v) => { setClassFilter(v); }} />
           </div>
-
-          {/* Day tabs */}
-          <div className="grid grid-cols-7 gap-px">
-            {days.map((day) => (
-              <div
-                key={day.toISOString()}
-                className={cn(
-                  "text-center py-2 text-xs font-medium",
-                  isToday(day) ? "text-white border-b-2 border-white" : "text-white/40"
-                )}
-              >
-                <div className="uppercase tracking-wider">{format(day, "EEE")}</div>
-                <div className={cn("text-lg font-montserrat font-bold", isToday(day) ? "text-white" : "text-white/60")}>
-                  {format(day, "d")}
-                </div>
-              </div>
-            ))}
+          <div>
+            <p className="text-white/30 uppercase tracking-widest text-xs mb-2">Coach</p>
+            <FilterPills options={INSTRUCTORS} value={coachFilter} onChange={(v) => { setCoachFilter(v); }} />
           </div>
         </div>
       </div>
 
-      {/* Schedule Grid — Desktop */}
-      <div className="max-w-6xl mx-auto px-4 py-6 hidden md:block">
-        <div className="grid grid-cols-7 gap-3">
-          {days.map((day) => {
-            const classes = getClassesForDay(day);
-            return (
-              <div key={day.toISOString()} className="space-y-2">
-                {classes.length === 0 ? (
-                  <div className="text-white/20 text-xs text-center py-8">Rest</div>
-                ) : (
-                  classes.map((cls) => (
-                    <ClassCard key={`${cls.id}-${day.toISOString()}`} cls={cls} date={day} isLoggedIn={isLoggedIn} />
-                  ))
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* Day sections */}
+      <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+        {DAYS_OF_WEEK.map(({ label, short, dow }) => {
+          const classes = SCHEDULE
+            .filter(c => c.days.includes(dow) && matches(c))
+            .sort((a, b) => {
+              // Sort by 24h time (parse from display string)
+              const toMins = (t: string) => {
+                const [time, period] = t.split(" ");
+                let [h, m] = time.split(":").map(Number);
+                if (period === "PM" && h !== 12) h += 12;
+                if (period === "AM" && h === 12) h = 0;
+                return h * 60 + m;
+              };
+              return toMins(a.time) - toMins(b.time);
+            });
 
-      {/* Schedule List — Mobile */}
-      <div className="max-w-xl mx-auto px-4 py-6 md:hidden space-y-6">
-        {days.map((day) => {
-          const classes = getClassesForDay(day);
+          const dayEvents = eventsByDow[dow] ?? [];
+          const today = isDayToday(dow);
+          const totalItems = classes.length + dayEvents.length;
+
+          if (totalItems === 0) return null;
+
           return (
-            <div key={day.toISOString()}>
-              <h3 className={cn(
-                "font-montserrat font-bold uppercase text-sm mb-2",
-                isToday(day) ? "text-white" : "text-white/40"
+            <div key={dow} className={cn(
+              "border",
+              today ? "border-white/30" : "border-white/10"
+            )}>
+              {/* Day header */}
+              <div className={cn(
+                "flex items-center gap-3 px-5 py-3 border-b",
+                today ? "bg-white text-black border-white/10" : "bg-zinc-950 text-white/60 border-white/10"
               )}>
-                {format(day, "EEEE, MMM d")}
-              </h3>
-              {classes.length === 0 ? (
-                <div className="text-white/20 text-xs py-2">No classes</div>
-              ) : (
-                <div className="space-y-2">
-                  {classes.map((cls) => (
-                    <ClassCard key={`${cls.id}-${day.toISOString()}`} cls={cls} date={day} isLoggedIn={isLoggedIn} />
-                  ))}
-                </div>
-              )}
+                <span className={cn(
+                  "font-montserrat font-extrabold text-xs uppercase tracking-widest",
+                  today ? "text-black" : "text-white/40"
+                )}>
+                  {short}
+                </span>
+                <span className={cn(
+                  "font-montserrat font-bold text-sm",
+                  today ? "text-black" : "text-white"
+                )}>
+                  {label}
+                </span>
+                {today && (
+                  <span className="ml-auto text-xs font-bold uppercase tracking-wider text-black/60">
+                    Today
+                  </span>
+                )}
+                <span className={cn(
+                  "ml-auto text-xs",
+                  today ? "text-black/50 ml-0" : "text-white/30"
+                )}>
+                  {classes.length} {classes.length === 1 ? "class" : "classes"}
+                  {dayEvents.length > 0 && ` · ${dayEvents.length} ${dayEvents.length === 1 ? "event" : "events"}`}
+                </span>
+              </div>
+
+              {/* Classes + Events */}
+              <div className="divide-y divide-white/5">
+                {classes.map(cls => (
+                  <ClassRow key={cls.id} cls={cls} onClick={() => setSelected(cls)} />
+                ))}
+                {dayEvents.map(ev => (
+                  <EventRow key={ev.slug} ev={ev} />
+                ))}
+              </div>
             </div>
           );
         })}
+
+        {/* Sunday — only show when no filters active */}
+        {classFilter === "All Classes" && coachFilter === "All Coaches" && (
+          <div className="border border-white/5">
+            <div className="flex items-center gap-3 px-5 py-3 bg-zinc-950 border-b border-white/5">
+              <span className="font-montserrat font-extrabold text-xs uppercase tracking-widest text-white/20">SUN</span>
+              <span className="font-montserrat font-bold text-sm text-white/30">Sunday</span>
+            </div>
+            <div className="px-5 py-6 text-white/20 text-sm italic">Rest Day</div>
+          </div>
+        )}
       </div>
 
       {/* Legend */}
-      <div className="max-w-6xl mx-auto px-4 pb-12">
-        <div className="border-t border-white/10 pt-6 flex flex-wrap gap-4">
-          {Object.entries(CLASS_COLORS).map(([name, cls]) => (
-            <div key={name} className={cn("flex items-center gap-2 text-xs text-white/50 border-l-2 pl-2", cls)}>
-              {name}
-            </div>
-          ))}
+      <div className="max-w-2xl mx-auto px-4 pb-16">
+        <div className="border-t border-white/10 pt-6 flex flex-wrap gap-6 text-xs text-white/40">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-white rounded-full" />
+            Strength &amp; Conditioning Group Class
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-amber-400 rounded-full" />
+            Homeschool Heroes
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-sky-400 rounded-full" />
+            Event (this week)
+          </div>
         </div>
       </div>
+
+      {/* Detail drawer */}
+      <DetailDrawer cls={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }

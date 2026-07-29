@@ -6,15 +6,15 @@ import { CheckCircle2, XCircle, Delete, RotateCcw } from "lucide-react";
 // ── Mock member database (keyed by 4-digit code) ──────────────────────────────
 
 const MEMBER_DB: Record<string, { name: string; plan: string }> = {
-  "1001": { name: "Randy Franklin",  plan: "Monthly Unlimited" },
+  "1001": { name: "Randy Franklin",  plan: "Base Membership" },
   "1002": { name: "Cookie Ainsworth", plan: "GAP Program" },
   "1003": { name: "Richard Lim",     plan: "GAP Program" },
   "1004": { name: "Brandi Long",     plan: "Small Group Training" },
-  "1005": { name: "Tamara Okafor",   plan: "Monthly Unlimited" },
+  "1005": { name: "Tamara Okafor",   plan: "Base Membership" },
   "1006": { name: "DeShawn Morris",  plan: "10-Class Pack" },
   "1007": { name: "Heather Valdez",  plan: "Small Group Training" },
   "1008": { name: "Marcus Webb",     plan: "GAP Program" },
-  "1009": { name: "Jasmine Torres",  plan: "Monthly Unlimited" },
+  "1009": { name: "Jasmine Torres",  plan: "Base Membership" },
   "1010": { name: "Tyler Reeves",    plan: "Personal Training" },
 };
 

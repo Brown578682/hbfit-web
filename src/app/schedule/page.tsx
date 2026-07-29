@@ -4,7 +4,6 @@ import { X, Clock, User, ArrowRight, CalendarDays, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isToday, getDay, startOfWeek, addDays, format } from "date-fns";
 import { getEventsForWeek, type HBFITEvent } from "@/lib/events-data";
-
 // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
 const SCHEDULE = [
   { id: "1", type: "Strength & Conditioning Group Class", instructor: "Heather Traves", time: "5:00 AM",  days: [1, 2, 3, 4, 5] },
@@ -74,7 +73,7 @@ function ClassRow({ cls, onClick }: { cls: ClassEntry; onClick: () => void }) {
   );
 }
 
-function DetailDrawer({ cls, onClose }: { cls: ClassEntry | null; onClose: () => void }) {
+function DetailDrawer({ cls, onClose, isLoggedIn }: { cls: ClassEntry | null; onClose: () => void; isLoggedIn: boolean }) {
   if (!cls) return null;
   const isHero = cls.type === "Homeschool Heroes";
 
@@ -147,12 +146,21 @@ function DetailDrawer({ cls, onClose }: { cls: ClassEntry | null; onClose: () =>
 
         {/* CTAs */}
         <div className="p-6 border-t border-white/10 space-y-3">
-          <a
-            href="/login?redirect=/schedule"
-            className="block w-full bg-white text-black font-montserrat font-extrabold uppercase tracking-wide text-sm py-3.5 text-center hover:bg-white/90 transition-colors"
-          >
-            Log In to Book
-          </a>
+          {isLoggedIn ? (
+            <a
+              href="/dashboard"
+              className="block w-full bg-white text-black font-montserrat font-extrabold uppercase tracking-wide text-sm py-3.5 text-center hover:bg-white/90 transition-colors"
+            >
+              Book via Dashboard →
+            </a>
+          ) : (
+            <a
+              href="/login?redirect=/schedule"
+              className="block w-full bg-white text-black font-montserrat font-extrabold uppercase tracking-wide text-sm py-3.5 text-center hover:bg-white/90 transition-colors"
+            >
+              Log In to Book
+            </a>
+          )}
           <a
             href="/join"
             className="block w-full border border-white/20 text-white font-montserrat font-bold uppercase tracking-wide text-sm py-3 text-center hover:border-white/50 hover:bg-white/5 transition-colors"
@@ -234,9 +242,13 @@ export default function SchedulePage() {
   const [selected, setSelected]       = useState<ClassEntry | null>(null);
   const [classFilter, setClassFilter] = useState("All Classes");
   const [coachFilter, setCoachFilter] = useState("All Coaches");
-
-  // Compute this week's events once — deferred to client to avoid SSR/client date mismatch
+  const [isLoggedIn, setIsLoggedIn]   = useState(false);
   const [thisWeekEvents, setThisWeekEvents] = useState<HBFITEvent[]>([]);
+
+  useEffect(() => {
+    fetch("/api/me").then(r => { if (r.ok) setIsLoggedIn(true) }).catch(() => {})
+  }, []);
+
   useEffect(() => {
     const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
     setThisWeekEvents(getEventsForWeek(weekStart));
@@ -393,7 +405,7 @@ export default function SchedulePage() {
       </div>
 
       {/* Detail drawer */}
-      <DetailDrawer cls={selected} onClose={() => setSelected(null)} />
+      <DetailDrawer cls={selected} onClose={() => setSelected(null)} isLoggedIn={isLoggedIn} />
     </div>
   );
 }

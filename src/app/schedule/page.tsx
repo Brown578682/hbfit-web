@@ -73,47 +73,105 @@ function ClassRow({ cls, onClick }: { cls: ClassEntry; onClick: () => void }) {
   );
 }
 
-function DetailDrawer({ cls, onClose, isLoggedIn }: { cls: ClassEntry | null; onClose: () => void; isLoggedIn: boolean }) {
-  if (!cls) return null;
-  const isHero = cls.type === "Homeschool Heroes";
+// ── Booking state types ───────────────────────────────────────────────────────
+type AvailabilityState = {
+  spotsLeft: number
+  isFull: boolean
+  confirmed: number
+  capacity: number
+  waitlisted: number
+  myBooking: { status: string; waitlistPosition: number | null } | null
+  sessionId: string | null
+} | null
+
+function DetailDrawer({ cls, onClose, isLoggedIn, selectedDate }: {
+  cls: ClassEntry | null
+  onClose: () => void
+  isLoggedIn: boolean
+  selectedDate: string   // YYYY-MM-DD
+}) {
+  const [avail, setAvail]     = useState<AvailabilityState>(null)
+  const [booking, setBooking] = useState(false)
+  const [msg, setMsg]         = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+
+  // Fetch availability when drawer opens
+  useEffect(() => {
+    if (!cls || !selectedDate) return
+    setAvail(null); setMsg(null)
+    fetch(`/api/classes/availability?slotId=${cls.id}&date=${selectedDate}`)
+      .then(r => r.json())
+      .then(setAvail)
+      .catch(() => {})
+  }, [cls, selectedDate])
+
+  if (!cls) return null
+  const isHero = cls.type === 'Homeschool Heroes'
+
+  const handleBook = async () => {
+    setBooking(true); setMsg(null)
+    try {
+      const r = await fetch('/api/classes/book', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slotId: cls.id, date: selectedDate }),
+      })
+      const data = await r.json()
+      if (!r.ok) { setMsg({ type: 'err', text: data.error ?? 'Booking failed.' }); return }
+      const status = data.booking.status
+      setMsg({ type: 'ok', text: status === 'CONFIRMED' ? '✓ Booked! See you there.' : `Added to waitlist (#${data.booking.waitlistPosition})` })
+      // Refresh availability
+      fetch(`/api/classes/availability?slotId=${cls.id}&date=${selectedDate}`).then(r => r.json()).then(setAvail)
+    } catch { setMsg({ type: 'err', text: 'Network error. Try again.' }) }
+    finally { setBooking(false) }
+  }
+
+  const handleCancel = async () => {
+    setBooking(true); setMsg(null)
+    try {
+      const r = await fetch('/api/classes/book', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slotId: cls.id, date: selectedDate }),
+      })
+      if (!r.ok) { const d = await r.json(); setMsg({ type: 'err', text: d.error ?? 'Cancel failed.' }); return }
+      setMsg({ type: 'ok', text: 'Booking cancelled.' })
+      fetch(`/api/classes/availability?slotId=${cls.id}&date=${selectedDate}`).then(r => r.json()).then(setAvail)
+    } catch { setMsg({ type: 'err', text: 'Network error. Try again.' }) }
+    finally { setBooking(false) }
+  }
+
+  const myStatus = avail?.myBooking?.status
+  const isBooked = myStatus === 'CONFIRMED'
+  const isWaitlisted = myStatus === 'WAITLISTED'
 
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm" onClick={onClose} />
       {/* Panel */}
       <div className="fixed bottom-0 left-0 right-0 md:right-auto md:top-0 md:left-auto md:right-0 md:w-96 z-50 bg-zinc-950 border-t md:border-t-0 md:border-l border-white/10 flex flex-col h-auto md:h-full">
         {/* Header */}
         <div className="flex items-start justify-between p-6 border-b border-white/10">
           <div>
             <p className="text-white/40 uppercase tracking-widest text-xs mb-1">Class Details</p>
-            <h2 className={cn(
-              "font-montserrat font-extrabold text-xl uppercase leading-tight",
-              isHero ? "text-amber-400" : "text-white"
-            )}>
+            <h2 className={cn('font-montserrat font-extrabold text-xl uppercase leading-tight', isHero ? 'text-amber-400' : 'text-white')}>
               {cls.type}
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-white/40 hover:text-white transition-colors mt-0.5"
-          >
+          <button onClick={onClose} className="p-1.5 text-white/40 hover:text-white transition-colors mt-0.5">
             <X size={20} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="flex-1 p-6 space-y-5">
+        <div className="flex-1 p-6 space-y-5 overflow-y-auto">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/5 flex items-center justify-center">
               <Clock size={18} className="text-white/60" />
             </div>
             <div>
               <div className="text-white/40 text-xs uppercase tracking-wider">Time</div>
-              <div className="text-white font-montserrat font-bold text-lg">{cls.time}</div>
+              <div className="text-white font-montserrat font-bold text-lg">{cls.time} · {selectedDate}</div>
             </div>
           </div>
 
@@ -127,6 +185,28 @@ function DetailDrawer({ cls, onClose, isLoggedIn }: { cls: ClassEntry | null; on
             </div>
           </div>
 
+          {/* Availability bar */}
+          {avail ? (
+            <div className="bg-white/5 border border-white/10 p-4 space-y-2">
+              <div className="flex justify-between text-xs text-white/40 uppercase tracking-wider">
+                <span>Availability</span>
+                <span className={avail.isFull ? 'text-red-400' : 'text-emerald-400'}>
+                  {avail.isFull ? `FULL · ${avail.waitlisted} waitlisted` : `${avail.spotsLeft} of ${avail.capacity} open`}
+                </span>
+              </div>
+              <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                <div
+                  className={cn('h-full rounded-full transition-all', avail.isFull ? 'bg-red-500' : 'bg-emerald-500')}
+                  style={{ width: `${Math.min(100, (avail.confirmed / avail.capacity) * 100)}%` }}
+                />
+              </div>
+              {isBooked && <p className="text-emerald-400 text-xs font-bold">✓ You&apos;re booked for this class</p>}
+              {isWaitlisted && <p className="text-amber-400 text-xs font-bold">⏳ Waitlist #{avail.myBooking?.waitlistPosition} — you&apos;ll be auto-promoted if a spot opens</p>}
+            </div>
+          ) : isLoggedIn ? (
+            <div className="h-12 bg-white/5 animate-pulse" />
+          ) : null}
+
           {isHero && (
             <div className="bg-amber-400/10 border border-amber-400/20 p-4">
               <p className="text-amber-400 text-sm leading-relaxed">
@@ -136,23 +216,35 @@ function DetailDrawer({ cls, onClose, isLoggedIn }: { cls: ClassEntry | null; on
             </div>
           )}
 
-          <div className="bg-white/5 p-4">
-            <p className="text-white/60 text-sm leading-relaxed">
-              All classes are 60 minutes. Members may book in advance through their dashboard.
-              Walk-ins welcome based on availability.
-            </p>
-          </div>
+          {msg && (
+            <div className={cn('p-3 text-sm font-bold', msg.type === 'ok' ? 'bg-emerald-950/50 border border-emerald-500/30 text-emerald-400' : 'bg-red-950/50 border border-red-500/30 text-red-400')}>
+              {msg.text}
+            </div>
+          )}
         </div>
 
         {/* CTAs */}
         <div className="p-6 border-t border-white/10 space-y-3">
           {isLoggedIn ? (
-            <a
-              href="/dashboard"
-              className="block w-full bg-white text-black font-montserrat font-extrabold uppercase tracking-wide text-sm py-3.5 text-center hover:bg-white/90 transition-colors"
-            >
-              Book via Dashboard →
-            </a>
+            <>
+              {isBooked || isWaitlisted ? (
+                <button
+                  onClick={handleCancel}
+                  disabled={booking}
+                  className="w-full border border-red-500/40 text-red-400 font-montserrat font-bold uppercase tracking-wide text-sm py-3.5 text-center hover:bg-red-950/30 transition-colors disabled:opacity-50"
+                >
+                  {booking ? 'Cancelling...' : isWaitlisted ? 'Leave Waitlist' : 'Cancel Booking'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleBook}
+                  disabled={booking}
+                  className="w-full bg-white text-black font-montserrat font-extrabold uppercase tracking-wide text-sm py-3.5 text-center hover:bg-white/90 transition-colors disabled:opacity-50"
+                >
+                  {booking ? 'Booking...' : avail?.isFull ? 'Join Waitlist' : 'Book This Class'}
+                </button>
+              )}
+            </>
           ) : (
             <a
               href="/login?redirect=/schedule"
@@ -161,12 +253,14 @@ function DetailDrawer({ cls, onClose, isLoggedIn }: { cls: ClassEntry | null; on
               Log In to Book
             </a>
           )}
-          <a
-            href="/join"
-            className="block w-full border border-white/20 text-white font-montserrat font-bold uppercase tracking-wide text-sm py-3 text-center hover:border-white/50 hover:bg-white/5 transition-colors"
-          >
-            Not a Member? Join Now
-          </a>
+          {!isLoggedIn && (
+            <a
+              href="/join"
+              className="block w-full border border-white/20 text-white font-montserrat font-bold uppercase tracking-wide text-sm py-3 text-center hover:border-white/50 hover:bg-white/5 transition-colors"
+            >
+              Not a Member? Join Now
+            </a>
+          )}
         </div>
       </div>
     </>
@@ -240,6 +334,7 @@ function FilterPills({
 
 export default function SchedulePage() {
   const [selected, setSelected]       = useState<ClassEntry | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string>('');
   const [classFilter, setClassFilter] = useState("All Classes");
   const [coachFilter, setCoachFilter] = useState("All Coaches");
   const [isLoggedIn, setIsLoggedIn]   = useState(false);
@@ -305,6 +400,12 @@ export default function SchedulePage() {
       {/* Day sections */}
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
         {DAYS_OF_WEEK.map(({ label, short, dow }) => {
+          // Compute the actual calendar date for this dow in the current week
+          const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
+          // dow: 1=Mon…6=Sat; weekStart is Monday
+          const dayDate = addDays(weekStart, dow - 1)
+          const dayDateStr = format(dayDate, 'yyyy-MM-dd')
+
           const classes = SCHEDULE
             .filter(c => c.days.includes(dow) && matches(c))
             .sort((a, b) => {
@@ -364,7 +465,7 @@ export default function SchedulePage() {
               {/* Classes + Events */}
               <div className="divide-y divide-white/5">
                 {classes.map(cls => (
-                  <ClassRow key={cls.id} cls={cls} onClick={() => setSelected(cls)} />
+                  <ClassRow key={cls.id} cls={cls} onClick={() => { setSelected(cls); setSelectedDate(dayDateStr) }} />
                 ))}
                 {dayEvents.map(ev => (
                   <EventRow key={ev.slug} ev={ev} />
@@ -405,7 +506,7 @@ export default function SchedulePage() {
       </div>
 
       {/* Detail drawer */}
-      <DetailDrawer cls={selected} onClose={() => setSelected(null)} isLoggedIn={isLoggedIn} />
+      <DetailDrawer cls={selected} onClose={() => setSelected(null)} isLoggedIn={isLoggedIn} selectedDate={selectedDate} />
     </div>
   );
 }

@@ -98,8 +98,12 @@ export default function JoinSuccessPage() {
     <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-6 py-16">
       {/* Logo / Brand */}
       <div className="mb-10 text-center">
-        <span className="text-red-600 text-5xl font-black font-montserrat tracking-tighter">HB</span>
-        <span className="text-white text-5xl font-black font-montserrat tracking-tighter">FIT</span>
+        <span className="text-blue-600 text-5xl font-black font-montserrat tracking-tighter">HB</span>
+        <span className="text-5xl font-black font-montserrat tracking-tighter">
+          <span className="text-red-600">F</span>
+          <span className="text-white">I</span>
+          <span className="text-red-600">T</span>
+        </span>
       </div>
 
       <Suspense

@@ -1,15 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getToken } from 'next-auth/jwt'
+import { auth } from '@/lib/auth'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
   const { nextUrl } = req
-
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET })
-  const isLoggedIn = !!token
-  const userRole = (token as any)?.role as string | undefined
-
-  // DEV PREVIEW: bypass auth in development
-  if (process.env.NODE_ENV === 'development') return NextResponse.next()
+  const session = await auth()
+  const isLoggedIn = !!session?.user
+  const userRole = (session?.user as any)?.role as string | undefined
 
   // /admin — ADMIN only
   if (nextUrl.pathname.startsWith('/admin')) {

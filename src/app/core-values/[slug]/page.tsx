@@ -64,7 +64,7 @@ export default async function CoreValuePost({ params }: Props) {
             unoptimized
             sizes="100vw"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/20 to-black" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black" />
 
           {/* Back link */}
           <div className="absolute top-6 left-6">

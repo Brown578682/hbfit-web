@@ -3,8 +3,10 @@ import Script from 'next/script'
 import { Inter, Montserrat, Lora } from 'next/font/google'
 import './globals.css'
 import { Navbar } from '@/components/layout/Navbar'
-import { Footer } from '@/components/layout/Footer'
+import { FooterWrapper } from '@/components/layout/FooterWrapper'
 import { Providers } from '@/components/Providers'
+import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister'
+import { GA4Tracker } from '@/components/GA4Tracker'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const montserrat = Montserrat({ subsets: ['latin'], variable: '--font-montserrat', weight: ['400', '600', '700', '800'] })
@@ -122,6 +124,9 @@ const jsonLd = {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
+  const gadsId = process.env.NEXT_PUBLIC_GADS_ID
+
   return (
     <html lang="en" className={`${inter.variable} ${montserrat.variable} ${lora.variable}`}>
       <head>
@@ -130,28 +135,35 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-        {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
+      </head>
+      <body className="bg-black text-white antialiased" suppressHydrationWarning>
+        {/* GA4 + Google Ads — scripts in body so Next.js Script component works correctly in App Router */}
+        {gaMeasurementId && (
           <>
             <Script
-              src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}`}
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
               strategy="afterInteractive"
             />
-            <Script id="ga-init" strategy="afterInteractive">
-              {`
+            <Script id="ga-init" strategy="afterInteractive"
+              dangerouslySetInnerHTML={{ __html: `
                 window.dataLayer = window.dataLayer || [];
                 function gtag(){dataLayer.push(arguments);}
                 gtag('js', new Date());
-                gtag('config', '${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}', { page_path: window.location.pathname });
-              `}
-            </Script>
+                gtag('config', '${gaMeasurementId}', {
+                  page_path: window.location.pathname,
+                  send_page_view: false
+                });
+                ${gadsId ? `gtag('config', '${gadsId}');` : ''}
+              `}}
+            />
+            <GA4Tracker measurementId={gaMeasurementId} />
           </>
         )}
-      </head>
-      <body className="bg-black text-white antialiased" suppressHydrationWarning>
         <Providers>
+          <ServiceWorkerRegister />
           <Navbar />
           <main>{children}</main>
-          <Footer />
+          <FooterWrapper />
         </Providers>
       </body>
     </html>

@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { HBFITMark } from '@/components/HBFITMark';
 
 interface SuccessData {
   memberName: string;
@@ -28,6 +29,16 @@ function JoinSuccessContent() {
       .then((json: SuccessData & { error?: string }) => {
         if (json.error) throw new Error(json.error);
         setData(json);
+        // Fire Google Ads conversion for membership signup
+        const gadsId = process.env.NEXT_PUBLIC_GADS_ID;
+        const label  = process.env.NEXT_PUBLIC_GADS_SIGNUP_LABEL;
+        if (gadsId && label && typeof window !== 'undefined' && window.gtag) {
+          window.gtag('event', 'conversion', {
+            send_to: `${gadsId}/${label}`,
+            value: 75.0,
+            currency: 'USD',
+          });
+        }
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -98,12 +109,7 @@ export default function JoinSuccessPage() {
     <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-6 py-16">
       {/* Logo / Brand */}
       <div className="mb-10 text-center">
-        <span className="text-blue-600 text-5xl font-black font-montserrat tracking-tighter">HB</span>
-        <span className="text-5xl font-black font-montserrat tracking-tighter">
-          <span className="text-red-600">F</span>
-          <span className="text-white">I</span>
-          <span className="text-red-600">T</span>
-        </span>
+        <HBFITMark className="text-5xl font-black font-montserrat tracking-tighter" />
       </div>
 
       <Suspense

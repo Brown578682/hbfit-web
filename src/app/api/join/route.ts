@@ -1,13 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { MEMBERSHIP_PLANS, STRIPE_PRICE_SITG_DONATION } from '@/lib/plans';
 import { generateMemberCode } from '@/lib/memberCode';
-import { sendGapPendingEmail, sendAdminGapNotification } from '@/lib/email';
+import { sendGapPendingEmail, sendAdminGapNotification, sendWelcomeEmail } from '@/lib/email';
+import { createSetPasswordToken } from '@/lib/tokens';
 
 export const runtime = 'nodejs';
+
+// ── Bot detection (shared with poolee route) ──────────────────────────────────
+const ipJoinSubmissions = new Map<string, { count: number; windowStart: number }>();
+function isJoinRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = ipJoinSubmissions.get(ip);
+  if (!entry || now - entry.windowStart > 60 * 60 * 1000) {
+    ipJoinSubmissions.set(ip, { count: 1, windowStart: now });
+    return false;
+  }
+  if (entry.count >= 5) return true;
+  entry.count++;
+  return false;
+}
+function looksLikeBotName(name: string): boolean {
+  if (name.length > 30) return true;
+  if (/[A-Z]{5,}/.test(name)) return true;
+  const altCase = name.replace(/[^a-zA-Z]/g, '');
+  if (altCase.length >= 8) {
+    let alternations = 0;
+    for (let i = 1; i < altCase.length; i++) {
+      const prevUpper = altCase[i - 1] === altCase[i - 1].toUpperCase();
+      const currUpper = altCase[i] === altCase[i].toUpperCase();
+      if (prevUpper !== currUpper) alternations++;
+    }
+    if (alternations / altCase.length > 0.7) return true;
+  }
+  return false;
+}
+function looksLikeBotEmail(email: string): boolean {
+  const local = email.split('@')[0] ?? '';
+  const segments = local.split('.');
+  const singleChars = segments.filter((s: string) => s.length === 1).length;
+  return singleChars >= 4;
+}
 
 let _stripe: Stripe | null = null;
 function getStripe(): Stripe {
@@ -20,6 +55,11 @@ function getStripe(): Stripe {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+    if (isJoinRateLimited(ip)) {
+      return NextResponse.json({ error: 'Too many submissions. Please try again later.' }, { status: 429 });
+    }
+
     const formData = await req.formData();
 
     // ── Extract fields ────────────────────────────────────────────────────────
@@ -34,6 +74,7 @@ export async function POST(req: NextRequest) {
     const state           = (formData.get('state')           as string | null)?.trim();
     const zip             = (formData.get('zip')             as string | null)?.trim();
     const householdRaw    = (formData.get('householdMembers') as string | null) ?? '[]';
+    const studentsRaw     = (formData.get('students')         as string | null) ?? '[]';
     const gapDoc          = formData.get('gapDoc') as File | null;
     const referredByName  = (formData.get('referredByName') as string | null)?.trim() ?? '';
     const standInTheGap   = formData.get('standInTheGap') === 'true';
@@ -44,6 +85,29 @@ export async function POST(req: NextRequest) {
         { error: 'Missing required fields: planSlug, firstName, lastName, email' },
         { status: 400 },
       );
+    }
+
+    // ── Bot detection ────────────────────────────────────────────────────────
+    const honeypot = formData.get('website') as string | null;
+    if (honeypot) return NextResponse.json({ ok: true }, { status: 201 });
+    if (looksLikeBotName(firstName) || looksLikeBotName(lastName)) {
+      console.warn(`[join] Bot name from ${ip}: ${firstName} ${lastName}`);
+      return NextResponse.json({ ok: true }, { status: 201 });
+    }
+    if (looksLikeBotEmail(email)) {
+      console.warn(`[join] Bot email from ${ip}: ${email}`);
+      return NextResponse.json({ ok: true }, { status: 201 });
+    }
+
+    // Primary account holder must be 18+
+    if (dob) {
+      const age = (Date.now() - new Date(dob).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+      if (age < 18) {
+        return NextResponse.json(
+          { error: 'Primary account holder must be 18 years of age or older.' },
+          { status: 400 },
+        );
+      }
     }
 
     // ── Look up plan from MEMBERSHIP_PLANS ────────────────────────────────────
@@ -60,6 +124,12 @@ export async function POST(req: NextRequest) {
       householdMembers = JSON.parse(householdRaw);
     } catch {
       return NextResponse.json({ error: 'Invalid householdMembers JSON' }, { status: 400 });
+    }
+    let students: { firstName: string; lastName: string; dob: string; email: string }[] = [];
+    try {
+      students = JSON.parse(studentsRaw);
+    } catch {
+      return NextResponse.json({ error: 'Invalid students JSON' }, { status: 400 });
     }
 
     // ── Look up referrer by name ──────────────────────────────────────────────
@@ -82,6 +152,44 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Create Stripe customer ────────────────────────────────────────────────
+    // Check parent email isn't already in DB
+    const existingParent = await prisma.user.findUnique({ where: { email: email! }, select: { id: true } });
+    if (existingParent) {
+      return NextResponse.json(
+        { error: 'An account with that email already exists. Please log in or use a different email.' },
+        { status: 409 },
+      );
+    }
+
+    // Check household member emails for duplicates / conflicts
+    const typedHousehold = householdMembers as { firstName: string; lastName: string; dob: string; email: string; phone: string }[];
+    const allEmails: string[] = [email!.toLowerCase().trim()];
+    for (let i = 0; i < typedHousehold.length; i++) {
+      const hm = typedHousehold[i];
+      if (!hm.email) continue;
+      const em = hm.email.toLowerCase().trim();
+      if (em === email!.toLowerCase().trim()) {
+        return NextResponse.json(
+          { error: `Family Member ${i + 1}: email must be different from the primary account email.` },
+          { status: 400 },
+        );
+      }
+      if (allEmails.includes(em)) {
+        return NextResponse.json(
+          { error: `Family Member ${i + 1}: email is already used by another member in this form.` },
+          { status: 400 },
+        );
+      }
+      const existingHm = await prisma.user.findUnique({ where: { email: em }, select: { id: true } });
+      if (existingHm) {
+        return NextResponse.json(
+          { error: `Family Member ${i + 1}: an account with that email already exists. Please use a different email or contact us.` },
+          { status: 409 },
+        );
+      }
+      allEmails.push(em);
+    }
+
     const customer = await getStripe().customers.create({
       name:  `${firstName} ${lastName}`,
       email: email ?? undefined,
@@ -118,26 +226,33 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Save document locally; replace with S3 upload in production
-      const gapDocsDir = '/tmp/gap-docs';
-      await mkdir(gapDocsDir, { recursive: true });
+      // Upload document to S3
+      const buffer   = Buffer.from(await gapDoc.arrayBuffer())
+      const ext      = path.extname(gapDoc.name) || '.bin'
+      const safeName = `gap-docs/${customer.id}-${Date.now()}${ext}`
 
-      const buffer   = Buffer.from(await gapDoc.arrayBuffer());
-      const ext      = path.extname(gapDoc.name) || '.bin';
-      const safeName = `${customer.id}-${Date.now()}${ext}`;
-      const filePath = path.join(gapDocsDir, safeName);
-
-      await writeFile(filePath, buffer);
-
-      // TODO (production): upload buffer to S3
-      // const s3Key = await uploadToS3(buffer, safeName, gapDoc.type);
+      const s3 = new (await import('@aws-sdk/client-s3')).S3Client({
+        region: process.env.AWS_REGION ?? 'us-east-1',
+        credentials: {
+          accessKeyId:     process.env.AWS_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+        },
+      })
+      const { PutObjectCommand } = await import('@aws-sdk/client-s3')
+      await s3.send(new PutObjectCommand({
+        Bucket:      process.env.AWS_S3_BUCKET ?? 'hbfit-uploads',
+        Key:         safeName,
+        Body:        buffer,
+        ContentType: gapDoc.type || 'application/octet-stream',
+      }))
+      const s3Key = safeName
 
       // Tag customer as PENDING so staff can review
       await getStripe().customers.update(customer.id, {
         metadata: {
           ...customer.metadata,
           gapStatus:  'PENDING',
-          gapDocPath: filePath,   // swap for s3Key in production
+          gapDocPath: s3Key,
           gapDocName: gapDoc.name,
           gapDocSize: String(gapDoc.size),
         },
@@ -168,7 +283,7 @@ export async function POST(req: NextRequest) {
           zip:             zip             ?? null,
           status:          'PENDING',
           gapEligible:     true,
-          gapDocumentUrl:  filePath,
+          gapDocumentUrl:  s3Key,
           stripeCustomerId: customer.id,
           source:          'join-form',
           memberCode,
@@ -190,6 +305,22 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      // ── Create Stripe Setup session to collect payment method upfront ────
+      // Card is saved to customer but NOT charged until admin approves.
+      const origin = req.headers.get('origin') ?? process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+      const setupSession = await getStripe().checkout.sessions.create({
+        mode: 'setup',
+        customer: customer.id,
+        currency: 'usd',
+        success_url: `${origin}/join/pending?setup=complete`,
+        cancel_url:  `${origin}/join?cancelled=true`,
+        metadata: {
+          customerId: customer.id,
+          planSlug,
+          gapSetup: 'true',
+        },
+      });
+
       // ── Send GAP emails (non-fatal) ───────────────────────────────────────
       try {
         await sendGapPendingEmail({ to: email ?? '', firstName: firstName ?? '', planName: plan.name });
@@ -199,18 +330,109 @@ export async function POST(req: NextRequest) {
           memberName: `${firstName ?? ''} ${lastName ?? ''}`.trim(),
           email: email ?? '',
           planName: plan.name,
-          docPath: filePath,
+          docPath: s3Key,
         });
       } catch (e) { console.error('[join/gap] admin notification failed:', e); }
 
       return NextResponse.json(
         {
-          pending:    true,
-          customerId: customer.id,
-          message:    'Your application has been received. Staff will review your document within 24 hours.',
+          pending:      true,
+          checkoutUrl:  setupSession.url,
+          customerId:   customer.id,
+          message:      'Your application has been received. Staff will review your document within 24 hours.',
         },
         { status: 202 },
       );
+    }
+
+    // ── Create student portal accounts for Homeschool Heroes ───────────────
+    if (planSlug === 'homeschool-heroes' && students.length > 0) {
+      const appUrl = process.env.NEXTAUTH_URL ?? 'https://honorboundfit.com';
+
+      // Server-side email uniqueness check before doing anything
+      const parentEmail = email?.toLowerCase().trim() ?? '';
+      const studentEmails = students.map(s => s.email?.toLowerCase().trim() ?? '');
+
+      for (let i = 0; i < students.length; i++) {
+        const s = students[i];
+        const em = s.email?.toLowerCase().trim() ?? '';
+
+        if (!em) {
+          return NextResponse.json(
+            { error: `Student ${i + 1}: email is required.` },
+            { status: 400 },
+          );
+        }
+        if (em === parentEmail) {
+          return NextResponse.json(
+            { error: `Student ${i + 1}: email must be different from the parent/guardian email.` },
+            { status: 400 },
+          );
+        }
+        if (studentEmails.indexOf(em) !== i) {
+          return NextResponse.json(
+            { error: `Student ${i + 1}: email is already used by another student in this form.` },
+            { status: 400 },
+          );
+        }
+        // Check against existing DB users
+        const existing = await prisma.user.findUnique({ where: { email: em }, select: { id: true } });
+        if (existing) {
+          return NextResponse.json(
+            { error: `Student ${i + 1}: an account with that email already exists. Please use a different email or contact us if you need help.` },
+            { status: 409 },
+          );
+        }
+      }
+
+      for (const s of students) {
+        // Guard: skip if student email is missing OR same as parent email
+        // (prevents creating the student on the parent's User record)
+        if (!s.email || s.email.toLowerCase() === email?.toLowerCase()) continue;
+        try {
+          const studentUser = await prisma.user.upsert({
+            where: { email: s.email },
+            update: {},
+            create: { email: s.email, name: s.firstName + ' ' + s.lastName, role: 'MEMBER' },
+          });
+          const studentMember = await prisma.member.upsert({
+            where: { userId: studentUser.id },
+            update: {},
+            create: {
+              userId: studentUser.id,
+              firstName: s.firstName,
+              lastName: s.lastName,
+              dateOfBirth: s.dob ? new Date(s.dob) : null,
+              status: 'ACTIVE',
+              source: 'homeschool-heroes',
+            },
+          });
+          // Create Membership row so plan shows in coach portal
+          const dbPlan = await prisma.membershipPlan.findUnique({ where: { slug: 'homeschool-heroes' } });
+          if (dbPlan) {
+            const existing = await prisma.membership.findFirst({ where: { memberId: studentMember.id, planId: dbPlan.id } });
+            if (!existing) {
+              await prisma.membership.create({
+                data: { memberId: studentMember.id, planId: dbPlan.id, status: 'ACTIVE' },
+              });
+            }
+          }
+          const token = await createSetPasswordToken(s.email);
+          const setPasswordUrl = appUrl + '/set-password?token=' + token;
+          await sendWelcomeEmail({
+            to: s.email,
+            firstName: s.firstName,
+            planName: 'Homeschool Heroes',
+            price: 0,
+            nextBillingDate: '',
+            isGap: false,
+            standInTheGap: false,
+            setPasswordUrl,
+          });
+        } catch (e) {
+          console.error('[join/homeschool] student account creation failed:', e);
+        }
+      }
     }
 
     // ── Standard plan path — create Stripe Checkout session ──────────────────
@@ -219,6 +441,27 @@ export async function POST(req: NextRequest) {
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       { price: plan.stripePriceId, quantity: 1 },
     ];
+
+    // HH: base covers 1 adult + 1 student. Additional members beyond that are $50 each.
+    // All other plans: base covers 1, each additional household member is $50.
+    // In both cases, total is capped at plan.cap.
+    if (planSlug === 'homeschool-heroes') {
+      const totalMembers = 1 + students.length + householdMembers.length;
+      const addOns = totalMembers - plan.baseIncludes; // baseIncludes = 2
+      if (addOns > 0) {
+        // Cap: max add-ons = (cap - base price) / addOn rate
+        const maxAddOns = plan.cap > 0 ? Math.floor((plan.cap - plan.price) / plan.addOn) : addOns;
+        const cappedAddOns = Math.min(addOns, maxAddOns);
+        const { getFamilyAddonPriceId } = await import('@/lib/plans');
+        lineItems.push({ price: getFamilyAddonPriceId(plan), quantity: cappedAddOns });
+      }
+    } else if (householdMembers.length > 0) {
+      const maxAddOns = plan.cap > 0 ? Math.floor((plan.cap - plan.price) / plan.addOn) : householdMembers.length;
+      const cappedAddOns = Math.min(householdMembers.length, maxAddOns);
+      const { getFamilyAddonPriceId } = await import('@/lib/plans');
+      lineItems.push({ price: getFamilyAddonPriceId(plan), quantity: cappedAddOns });
+    }
+
     if (standInTheGap) {
       lineItems.push({ price: STRIPE_PRICE_SITG_DONATION, quantity: 1 });
     }
@@ -232,7 +475,8 @@ export async function POST(req: NextRequest) {
       subscription_data: {
         metadata: {
           customerId:     customer.id,
-          planSlug,
+          // HH signups with students → parent gets hh-parent plan (HH + Open Gym access)
+          planSlug:       planSlug,
           memberName:     `${firstName} ${lastName}`,
           standInTheGap:  standInTheGap ? 'true' : 'false',
         },

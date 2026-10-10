@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import { prisma } from '@/lib/prisma';
 import { MEMBERSHIP_PLANS } from '@/lib/plans';
 import { generateMemberCode } from '@/lib/memberCode';
-import { sendWelcomeEmail } from '@/lib/email';
+import { sendWelcomeEmail, sendDropInWelcomeEmail } from '@/lib/email';
 import { createSetPasswordToken } from '@/lib/tokens';
 
 export const runtime = 'nodejs';
@@ -19,9 +19,24 @@ function getStripe(): Stripe {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** Determine AccessLevel from plan slug */
+function accessLevelForPlan(slug: string): 'FULL' | 'HH_AND_OG' | 'TRIBAL_ELDERS_ONLY' | 'OPEN_GYM_ONLY' {
+  if (slug === 'homeschool-heroes') return 'HH_AND_OG';
+  if (slug === 'tribal-elders')     return 'TRIBAL_ELDERS_ONLY';
+  if (slug === 'open-gym')          return 'OPEN_GYM_ONLY';
+  return 'FULL'; // base, gap, and anything unrecognised
+}
+
+/** Is this DOB a minor (under 18)? */
+function isMinorDob(dob: Date | null): boolean {
+  if (!dob) return false;
+  const age = (Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+  return age < 18;
+}
+
 /** Upsert a User+Member pair and return the Member id. */
 async function upsertMember(opts: {
-  email: string;
+  email?: string | null;        // optional — minors and portal-less members have none
   firstName: string;
   lastName: string;
   phone?: string | null;
@@ -30,10 +45,12 @@ async function upsertMember(opts: {
   city?: string | null;
   state?: string | null;
   zip?: string | null;
-  stripeCustomerId: string;
+  stripeCustomerId?: string | null;
   referredById?: string | null;
   householdId?: string | null;
   isHouseholdPrimary?: boolean;
+  isMinor?: boolean;
+  accessLevel?: 'FULL' | 'HH_AND_OG' | 'TRIBAL_ELDERS_ONLY' | 'OPEN_GYM_ONLY';
   status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING' | 'LEAD' | 'VISITOR';
 }): Promise<string> {
   const {
@@ -50,46 +67,52 @@ async function upsertMember(opts: {
     referredById,
     householdId,
     isHouseholdPrimary = false,
+    isMinor: isMinorFlag = false,
+    accessLevel = 'FULL' as ('FULL' | 'HH_AND_OG' | 'TRIBAL_ELDERS_ONLY' | 'OPEN_GYM_ONLY'),
     status = 'ACTIVE',
   } = opts;
 
-  // Check if member already exists
-  const existing = await prisma.member.findUnique({
-    where: { stripeCustomerId },
-    select: { id: true },
-  });
-  if (existing) return existing.id;
+  // Check if member already exists by stripeCustomerId
+  if (stripeCustomerId) {
+    const existing = await prisma.member.findUnique({
+      where: { stripeCustomerId },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
+  }
 
   const memberCode = await generateMemberCode(dateOfBirth ?? null);
 
-  // Upsert User (email may already exist if they've visited before)
-  const user = await prisma.user.upsert({
-    where: { email },
-    update: { name: `${firstName} ${lastName}` },
-    create: {
-      email,
-      name: `${firstName} ${lastName}`,
-      role: 'MEMBER',
-    },
-  });
+  // Create User only if email provided (adults with portal access)
+  let userId: string | undefined;
+  if (email) {
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { name: `${firstName} ${lastName}` },
+      create: { email, name: `${firstName} ${lastName}`, role: 'MEMBER' },
+    });
+    userId = user.id;
+  }
 
   const member = await prisma.member.create({
     data: {
-      userId:           user.id,
+      ...(userId ? { userId } : {}),
       firstName,
       lastName,
-      phone:            phone       ?? null,
-      dateOfBirth:      dateOfBirth ?? null,
-      address:          address     ?? null,
-      city:             city        ?? null,
-      state:            state       ?? null,
-      zip:              zip         ?? null,
+      phone:             phone       ?? null,
+      dateOfBirth:       dateOfBirth ?? null,
+      address:           address     ?? null,
+      city:              city        ?? null,
+      state:             state       ?? null,
+      zip:               zip         ?? null,
       status,
-      stripeCustomerId,
-      source:           'join-form',
+      isMinor:           isMinorFlag || isMinorDob(dateOfBirth ?? null),
+      accessLevel:       accessLevel as any,
+      ...(stripeCustomerId ? { stripeCustomerId } : {}),
+      source:            'join-form',
       memberCode,
-      referredById:     referredById ?? null,
-      householdId:      householdId  ?? null,
+      referredById:      referredById ?? null,
+      householdId:       householdId  ?? null,
       isHouseholdPrimary,
     },
   });
@@ -135,6 +158,84 @@ export async function POST(req: NextRequest) {
   // ── checkout.session.completed ──────────────────────────────────────────────
   if (event.type === 'checkout.session.completed') {
     const session   = event.data.object as Stripe.Checkout.Session;
+
+    // ── Drop-in / 10-pack credit top-up (one-time payment, no customer required) ──
+    if (session.metadata?.type === 'drop-in' || session.metadata?.type === 'ten-pack') {
+      const credits      = parseInt(session.metadata.credits ?? '1', 10);
+      const memberEmail  = session.metadata.memberEmail || session.customer_email || '';
+      const memberFirst  = session.metadata.memberFirstName || '';
+      const memberLast   = session.metadata.memberLastName  || '';
+
+      if (memberEmail) {
+        // Find or create the user
+        let user = await prisma.user.findUnique({ where: { email: memberEmail }, select: { id: true } });
+        let isNewAccount = false;
+
+        if (!user) {
+          user = await prisma.user.create({
+            data: { email: memberEmail, name: `${memberFirst} ${memberLast}`.trim() || memberEmail, role: 'MEMBER' },
+            select: { id: true },
+          });
+          isNewAccount = true;
+        }
+
+        // Find or create the member record
+        let member = await prisma.member.findUnique({ where: { userId: user.id }, select: { id: true } });
+
+        if (!member) {
+          // Generate member code
+          const now = new Date();
+          const mm = String(now.getMonth() + 1).padStart(2, '0');
+          const yy = String(now.getFullYear()).slice(-2);
+          const rand = Math.floor(Math.random() * 900 + 100);
+          const memberCode = `${mm}${yy}${rand}`;
+
+          member = await prisma.member.create({
+            data: {
+              userId:      user.id,
+              firstName:   memberFirst || memberEmail.split('@')[0],
+              lastName:    memberLast  || '',
+              status:      'ACTIVE',
+              accessLevel: 'FULL',
+              source:      'drop-in',
+              memberCode,
+              classCredits: credits,
+            },
+            select: { id: true },
+          });
+          isNewAccount = true;
+        } else {
+          // Existing member — just increment credits
+          await prisma.member.update({
+            where: { id: member.id },
+            data: { classCredits: { increment: credits } },
+          });
+        }
+
+        console.log(`[webhook] +${credits} class credits → member ${member.id} (${memberEmail})${isNewAccount ? ' [new account]' : ''}`);
+
+        // Send set-password email for new accounts
+        if (isNewAccount) {
+          try {
+            const appUrl = process.env.NEXTAUTH_URL ?? 'https://honorboundfit.com';
+            const token = await createSetPasswordToken(memberEmail);
+            const setPasswordUrl = `${appUrl}/set-password?token=${token}`;
+            const displayName = memberFirst || memberEmail.split('@')[0];
+
+            await sendDropInWelcomeEmail({
+              to:             memberEmail,
+              firstName:      displayName,
+              credits,
+              setPasswordUrl,
+            });
+          } catch (emailErr) {
+            console.error('[webhook] drop-in welcome email failed:', emailErr);
+          }
+        }
+      }
+      return NextResponse.json({ received: true });
+    }
+
     const customerId = (typeof session.customer === 'string'
       ? session.customer
       : session.customer?.id) ?? null;
@@ -217,25 +318,31 @@ export async function POST(req: NextRequest) {
           referredById,
           householdId,
           isHouseholdPrimary: householdMembersArr.length > 0,
+          accessLevel: accessLevelForPlan(planSlug) as any,
           status: 'ACTIVE',
         });
 
-        // Create household members
+        // Create household members — no synthetic emails, no fake stripeCustomerIds
         for (const hm of householdMembersArr) {
           if (!hm.firstName || !hm.lastName) continue;
           const hmDob = hm.dob ? new Date(hm.dob) : null;
-          // Use a synthetic email to avoid conflicts (no real email for dependents)
-          const syntheticEmail = `${hm.firstName.toLowerCase()}.${hm.lastName.toLowerCase()}.${Date.now()}@household.hbfit.local`;
+          const hmEmail = (hm as any).email?.trim() || null; // real email if provided
+          const hmIsMinor = isMinorDob(hmDob);
+          // HH students get HH_AND_OG access; adults on HH household also get HH_AND_OG;
+          // adults on Base/GAP household get FULL
+          const hmAccess = (planSlug === 'homeschool-heroes' || planSlug === 'hh-parent')
+            ? 'HH_AND_OG'
+            : accessLevelForPlan(planSlug);
+
           await upsertMember({
-            email:       syntheticEmail,
-            firstName:   hm.firstName,
-            lastName:    hm.lastName,
+            email:       hmEmail,
+            firstName:   hm.firstName.trim(),
+            lastName:    hm.lastName.trim(),
             dateOfBirth: hmDob,
-            stripeCustomerId: `${customerId}_hm_${hm.firstName}_${hm.lastName}`.slice(0, 64),
-            householdId: householdMembersArr.length > 0
-              ? (await prisma.member.findUnique({ where: { id: memberId }, select: { householdId: true } }))?.householdId ?? null
-              : null,
-            status: 'ACTIVE',
+            householdId: (await prisma.member.findUnique({ where: { id: memberId }, select: { householdId: true } }))?.householdId ?? null,
+            isMinor:     hmIsMinor,
+            accessLevel: hmAccess as any,
+            status:      'ACTIVE',
           });
         }
       }
@@ -311,6 +418,61 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.error('[webhook/stripe] checkout.session.completed error:', err);
       return NextResponse.json({ error: 'Internal error processing checkout' }, { status: 500 });
+    }
+  }
+
+  // ── customer.subscription.updated ──────────────────────────────────────────
+  else if (event.type === 'customer.subscription.updated') {
+    const subscription = event.data.object as Stripe.Subscription
+    const sub = subscription as any // field names vary by API version
+    const customerId   = typeof subscription.customer === 'string'
+      ? subscription.customer
+      : subscription.customer?.id ?? null
+
+    if (customerId) {
+      try {
+        const member = await prisma.member.findUnique({
+          where: { stripeCustomerId: customerId },
+          select: { id: true },
+        })
+
+        if (member) {
+          const statusMap: Record<string, string> = {
+            active:   'ACTIVE',
+            past_due: 'PAST_DUE',
+            canceled: 'CANCELED',
+            trialing: 'TRIALING',
+            paused:   'PAUSED',
+          }
+          const newStatus = statusMap[subscription.status] ?? 'ACTIVE'
+
+          await prisma.membership.updateMany({
+            where: { memberId: member.id, stripeSubscriptionId: subscription.id },
+            data: {
+              status:             newStatus as any,
+              cancelAtPeriodEnd:  subscription.cancel_at_period_end,
+              currentPeriodStart: sub.current_period_start
+                ? new Date(sub.current_period_start * 1000) : undefined,
+              currentPeriodEnd:   sub.current_period_end
+                ? new Date(sub.current_period_end   * 1000)
+                : sub.cancel_at
+                  ? new Date(sub.cancel_at * 1000) : undefined,
+              canceledAt:         sub.canceled_at
+                ? new Date(sub.canceled_at * 1000) : undefined,
+            },
+          })
+
+          if (newStatus === 'CANCELED') {
+            await prisma.member.update({
+              where: { id: member.id },
+              data: { status: 'INACTIVE' },
+            })
+          }
+        }
+      } catch (err) {
+        console.error('[webhook/stripe] customer.subscription.updated error:', err)
+        return NextResponse.json({ error: 'Internal error processing subscription update' }, { status: 500 })
+      }
     }
   }
 

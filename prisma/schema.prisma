@@ -42,7 +42,8 @@ model VerificationToken {
 
 model User {
   id            String    @id @default(cuid())
-  email         String    @unique
+  email         String?   @unique   // optional for minor/username-only accounts
+  username      String?   @unique   // for minors logging in without email
   emailVerified DateTime?
   name          String?
   image         String?
@@ -59,7 +60,7 @@ model User {
 
 model Member {
   id                 String          @id @default(cuid())
-  userId             String          @unique
+  userId             String?         @unique  // null for minors and portal-less members
   firstName          String
   lastName           String
   phone              String?
@@ -80,14 +81,20 @@ model Member {
   joinedAt           DateTime        @default(now())
   lastVisit          DateTime?
   status             MemberStatus    @default(ACTIVE)
+  isMinor            Boolean         @default(false)  // set from DOB at creation; no portal login
+  accessLevel        AccessLevel     @default(FULL)   // enforced at booking time
   gapEligible        Boolean         @default(false)
   gapCategory        GapCategory?
   gapVerifiedAt      DateTime?
   gapDocumentUrl     String?
   gapVerifiedBy      String?
   stripeCustomerId   String?         @unique
+  photoUrl           String?                          // S3 URL for member profile photo
   householdId        String?
   isHouseholdPrimary Boolean         @default(false)
+  billingStartDate   DateTime?                        // For MIGRATING members: when Stripe billing begins
+  gymDeskLastBilled  DateTime?                        // Last GymDesk payment date
+  classCredits       Int             @default(0)              // prepaid drop-in / 10-pack credits
   referredById       String?
   preferredCoachId   String?
   referredBy         Member?         @relation("MemberReferrals", fields: [referredById], references: [id])
@@ -97,7 +104,7 @@ model Member {
   checkIns           CheckIn[]
   bookings           ClassBooking[]
   household          Household?      @relation(fields: [householdId], references: [id])
-  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   memberships        Membership[]
   progress           ProgressEntry[]
   onboarding         MemberOnboarding?
@@ -106,6 +113,9 @@ model Member {
   coreMetrics        CoreMetrics[]
   kioskPurchases     KioskPurchase[]
   kioskMessages      KioskMessage[]
+  messageThreads     MessageThread[]
+  recurringBookings  RecurringBooking[]
+  corporateEmployee  CorporateEmployee?
 
   @@index([status])
   @@index([stripeCustomerId])
@@ -157,13 +167,23 @@ model Membership {
 }
 
 model ClassType {
-  id          String         @id @default(cuid())
-  name        String         @unique
-  description String?
-  color       String         @default("#000000")
-  duration    Int            @default(60)
-  isActive    Boolean        @default(true)
-  sessions    ClassSession[]
+  id             String         @id @default(cuid())
+  name           String         @unique
+  description    String?
+  color          String         @default("#000000")
+  duration       Int            @default(60)
+  isActive       Boolean        @default(true)
+  accessCategory ClassCategory  @default(FULL_ACCESS)  // who can book this
+  sessions       ClassSession[]
+  scheduleSlots  ScheduleSlot[]
+}
+
+enum ClassCategory {
+  FULL_ACCESS     // anyone with FULL access (Base/GAP)
+  HH              // Homeschool Heroes — HH plan members only
+  OPEN_GYM        // Open Gym — all plans can access
+  TRIBAL_ELDERS   // Tribal Elders — TE plan only
+  FREE_EVENT      // any member can book regardless of plan
 }
 
 model ClassSession {
@@ -290,6 +310,8 @@ model Staff {
   isActive  Boolean        @default(true)
   sessions  ClassSession[]
   coachNotes CoachNote[]
+  messageThreads MessageThread[] @relation("CoachThreads")
+  scheduleSlots  ScheduleSlot[]  @relation("StaffScheduleSlots")
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -318,8 +340,34 @@ model Event {
   endDate       DateTime?
   location      String?
   externalUrl   String?
-  status        EventStatus @default(PUBLISHED)
+  status        EventStatus @default(DRAFT)
   createdAt     DateTime    @default(now())
+
+  // Overview
+  cost              String?
+  deadline          DateTime?
+  collaborators     String?
+
+  // Logistics
+  permitRequired    Boolean?
+  permitApplied     DateTime?
+  permitApproved    DateTime?
+  equipmentRequired String?
+
+  // Checklists (stored as JSON arrays/objects)
+  imageAssets       Json?   // { poster: bool, banner: bool, square: bool, vertical: bool, runsignupBanner: bool, facebookBanner: bool, eventbriteBanner: bool }
+  postingChannels   Json?   // { eventsPage: bool, facebookEvents: bool, eventbrite: bool, runsignup: bool, fredericksburgFreePress: bool, lakeAnnaGuide: bool, rallyPoint: bool, allEventsIn: bool, teamRwbApp: bool, goruck: bool, scso: bool, fxbgNeighbors: bool, newsletter: bool, radioEvents: bool, gymDesk: bool }
+  bookingLinks      Json?   // { gymDesk: bool, runSignUp: bool, facebook: bool, eventbrite: bool }
+
+  // Financial tables (JSON arrays of rows)
+  operationalCosts  Json?   // [{ type, source, required, budget, cost }]
+  marketingPlan     Json?   // [{ type, description, beginDate, endDate, budget, location }]
+  sponsorships      Json?   // [{ type, sponsor, fee, due, paid }]
+  attendance        Json?   // [{ type, source, ipa, projected, actual }]
+
+  // After action
+  afterActionNotes  String?
+  finalCba          Json?   // { firstTime, returning, sponsors, vendors, partners, totalAttendance, volunteersPresent, volunteersRecruited, mentorSignups, menteeSignups, ysaRegistrations, contactRegistrations, sponsorshipIncome, eventRegistration, donationsPrior, donationsDuring, foodRaffleIncome, totalIncome }
 }
 
 model HeroTreeEntry {
@@ -350,6 +398,14 @@ enum MemberStatus {
   PENDING
   LEAD
   VISITOR
+  MIGRATING
+}
+
+enum AccessLevel {
+  FULL               // Base, GAP — all classes
+  HH_AND_OG          // HH plan — Homeschool Heroes + Open Gym only
+  TRIBAL_ELDERS_ONLY // Tribal Elders plan — TE programming only
+  OPEN_GYM_ONLY      // Open Gym standalone
 }
 
 enum GapCategory {
@@ -393,6 +449,26 @@ enum EventStatus {
   DRAFT
   PUBLISHED
   CANCELED
+}
+
+// ── F3 — Foster Families Free ─────────────────────────────────────────────────
+model F3Application {
+  id                    String   @id @default(cuid())
+  createdAt             DateTime @default(now())
+  firstName             String
+  lastName              String
+  email                 String
+  phone                 String
+  address               String
+  city                  String
+  state                 String
+  zip                   String
+  numberOfFosterChildren Int
+  fosteringDuration     String   // e.g. "Less than 1 year", "1-3 years", etc.
+  agencyName            String?
+  heardAboutUs          String?
+  additionalNotes       String?
+  status                String   @default("pending") // pending, approved, denied
 }
 
 // ── Push Notifications ────────────────────────────────────────────────────────
@@ -567,15 +643,17 @@ model KioskProduct {
 }
 
 model KioskPurchase {
-  id          String        @id @default(cuid())
-  memberId    String
-  productId   String
-  quantity    Int           @default(1)
-  priceCents  Int           // snapshot at time of purchase
-  purchasedAt DateTime      @default(now())
-  settledAt   DateTime?     // null = tab open / pending payment
-  member      Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  product     KioskProduct  @relation(fields: [productId], references: [id])
+  id                    String        @id @default(cuid())
+  memberId              String
+  productId             String
+  quantity              Int           @default(1)
+  priceCents            Int           // snapshot at time of purchase
+  notes                 String?       // e.g. tumbler personalization text
+  stripePaymentIntentId String?       // set when charged via stored card
+  purchasedAt           DateTime      @default(now())
+  settledAt             DateTime?     // null = tab open / pending payment
+  member                Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  product               KioskProduct  @relation(fields: [productId], references: [id])
 
   @@index([memberId])
   @@index([purchasedAt])
@@ -591,4 +669,169 @@ model KioskMessage {
 
   @@index([memberId])
   @@index([sentAt])
+}
+
+// ── Contact Form (public visitors) ───────────────────────────────────────────
+model ContactMessage {
+  id        String    @id @default(cuid())
+  name      String
+  email     String
+  subject   String?
+  message   String
+  sentAt    DateTime  @default(now())
+  readAt    DateTime?
+  repliedAt DateTime?
+
+  @@index([sentAt])
+}
+
+// ── Member ↔ Coach Messaging ──────────────────────────────────────────────────
+model MessageThread {
+  id        String         @id @default(cuid())
+  memberId  String
+  coachId   String?        // null = any coach / admin; set = specific coach's inbox
+  subject   String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  member    Member         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  coach     Staff?         @relation("CoachThreads", fields: [coachId], references: [id])
+  entries   MessageEntry[]
+
+  @@index([memberId])
+  @@index([updatedAt])
+  @@index([coachId])
+}
+
+model MessageEntry {
+  id          String        @id @default(cuid())
+  threadId    String
+  senderType  SenderType
+  senderName  String
+  body        String
+  sentAt      DateTime      @default(now())
+  readAt      DateTime?
+  thread      MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
+  @@index([sentAt])
+}
+
+enum SenderType {
+  MEMBER
+  COACH
+}
+
+model ScheduleSlot {
+  id          String    @id @default(cuid())
+  slotKey     String    @unique       // matches legacy schedule-data.ts id (s1, og1, etc.)
+  classTypeId String
+  instructorId String?
+  startHour   Int
+  startMinute Int
+  durationMin Int
+  days        Int[]                   // 0=Sun … 6=Sat
+  capacity    Int       @default(12)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  classType   ClassType @relation(fields: [classTypeId], references: [id])
+  instructor  Staff?    @relation("StaffScheduleSlots", fields: [instructorId], references: [id])
+
+  @@index([isActive])
+  @@index([instructorId])
+}
+
+// Member sets "I want s1 every Mon/Wed/Fri forever" — cron auto-books sessions
+model RecurringBooking {
+  id        String   @id @default(cuid())
+  memberId  String
+  slotId    String   // references schedule-data slot id (e.g. "s1")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, slotId])
+  @@index([memberId])
+  @@index([slotId])
+}
+
+// ── Corporate Wellness ────────────────────────────────────────────────────────
+
+model CorporateAccount {
+  id                  String                @id @default(cuid())
+  companyName         String
+  contactFirstName    String
+  contactLastName     String
+  contactEmail        String                @unique
+  contactPhone        String?
+  planTier            CorporateTier         @default(SMALL)   // drives pricing & seat cap
+  stripeCustomerId    String?               @unique
+  stripeSubscriptionId String?              @unique
+  status              CorporateStatus       @default(PENDING)
+  billingStartDate    DateTime?
+  seatCount           Int                   @default(0)       // live count synced on enroll
+  notes               String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  employees           CorporateEmployee[]
+}
+
+model CorporateEmployee {
+  id                  String                @id @default(cuid())
+  accountId           String
+  firstName           String
+  lastName            String
+  email               String
+  inviteToken         String?               @unique           // UUID sent in onboarding email
+  inviteExpiresAt     DateTime?
+  inviteAcceptedAt    DateTime?
+  memberId            String?               @unique           // set once they complete onboarding
+  status              CorporateEmployeeStatus @default(INVITED)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  account             CorporateAccount      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  member              Member?               @relation(fields: [memberId], references: [id], onDelete: SetNull)
+
+  @@index([accountId])
+  @@index([inviteToken])
+  @@index([email])
+}
+
+enum CorporateTier {
+  SMALL   // up to 5 employees  — $250/mo
+  MEDIUM  // up to 15 employees — $750/mo
+  LARGE   // up to 50 employees — $2500/mo
+}
+
+enum CorporateStatus {
+  PENDING   // account created, billing not yet set up
+  ACTIVE
+  PAUSED
+  CANCELED
+}
+
+enum CorporateEmployeeStatus {
+  INVITED       // email sent, not yet accepted
+  ONBOARDING    // clicked link, in progress
+  ACTIVE        // member record created & linked
+  REMOVED       // removed from account
+}
+
+// Booth / event promo leads
+model BoothLead {
+  id             String   @id @default(cuid())
+  firstName      String
+  lastName       String
+  email          String
+  phone          String
+  dateOfBirth    DateTime?
+  waiverSigned   Boolean  @default(true)
+  marketingOptIn Boolean  @default(true)
+  notes          String?
+  source         String   @default("booth")
+  createdAt      DateTime @default(now())
+
+  @@index([email])
+  @@index([createdAt])
 }

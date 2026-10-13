@@ -1291,3 +1291,236 @@ export function sendDropInWelcomeEmail(opts: {
   });
 }
 
+// ── F3 — Foster Families Free Emails ─────────────────────────────────────────
+
+export async function sendF3ApplicationConfirmation(opts: {
+  to: string;
+  firstName: string;
+  lastName: string;
+}) {
+  const { to, firstName, lastName } = opts;
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>F3 Application Received — Honor Bound FIT</title>
+</head>
+<body style="margin:0;padding:0;background:#000000;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#000000;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+        <!-- Wordmark -->
+        <tr>
+          <td style="padding:0 0 32px 0;" align="center">
+            <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:42px;font-weight:900;letter-spacing:-1px;text-transform:uppercase;line-height:1;">
+              <span style="color:#1d4ed8;">HB</span><span style="color:#dc2626;">F</span><span style="color:#ffffff;">I</span><span style="color:#dc2626;">T</span>
+            </span>
+          </td>
+        </tr>
+
+        <!-- Hero -->
+        <tr>
+          <td style="background:#111111;border:1px solid #333333;padding:48px 40px;">
+            <p style="color:#dc2626;font-size:11px;letter-spacing:4px;text-transform:uppercase;margin:0 0 16px 0;font-weight:700;">
+              Foster Families Free
+            </p>
+            <h1 style="color:#ffffff;font-size:28px;font-weight:900;text-transform:uppercase;margin:0 0 24px 0;letter-spacing:1px;line-height:1.1;">
+              Application Received, ${firstName}.
+            </h1>
+            <p style="color:rgba(255,255,255,0.6);font-size:15px;line-height:1.7;margin:0 0 24px 0;">
+              We've received your F3 application for <strong style="color:#ffffff;">${firstName} ${lastName}</strong>.
+              Our team will verify your foster family status and reach out within
+              <strong style="color:#ffffff;">48 hours</strong>.
+            </p>
+            <p style="color:rgba(255,255,255,0.6);font-size:15px;line-height:1.7;margin:0 0 32px 0;">
+              <strong style="color:#ffffff;">There is no cost, no catch.</strong> If approved, your family receives
+              a full gym membership at zero charge — because the people who show up for kids deserve
+              a community that shows up for them.
+            </p>
+
+            <!-- Divider -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+              <tr><td style="border-top:1px solid #333333;"></td></tr>
+            </table>
+
+            <p style="color:rgba(255,255,255,0.4);font-size:13px;line-height:1.6;margin:0;">
+              Questions? Email us at <a href="mailto:Rich@HonorBoundFIT.com" style="color:#dc2626;text-decoration:none;">Rich@HonorBoundFIT.com</a>
+            </p>
+          </td>
+        </tr>
+
+        <!-- What happens next -->
+        <tr>
+          <td style="background:#0a0a0a;border:1px solid #222222;border-top:0;padding:32px 40px;">
+            <p style="color:rgba(255,255,255,0.4);font-size:10px;letter-spacing:3px;text-transform:uppercase;margin:0 0 20px 0;">
+              What Happens Next
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding:0 0 20px 0;vertical-align:top;width:20px;">
+                  <span style="color:#dc2626;font-size:14px;font-weight:900;">01</span>
+                </td>
+                <td style="padding:0 0 20px 16px;">
+                  <p style="color:#ffffff;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;">We Verify</p>
+                  <p style="color:rgba(255,255,255,0.5);font-size:13px;line-height:1.6;margin:0;">Staff will review and confirm your foster family status within 48 hours.</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:0 0 20px 0;vertical-align:top;width:20px;">
+                  <span style="color:#dc2626;font-size:14px;font-weight:900;">02</span>
+                </td>
+                <td style="padding:0 0 20px 16px;">
+                  <p style="color:#ffffff;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;">We Reach Out</p>
+                  <p style="color:rgba(255,255,255,0.5);font-size:13px;line-height:1.6;margin:0;">You'll receive a confirmation email once your enrollment is approved.</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:0;vertical-align:top;width:20px;">
+                  <span style="color:#dc2626;font-size:14px;font-weight:900;">03</span>
+                </td>
+                <td style="padding:0 0 0 16px;">
+                  <p style="color:#ffffff;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;">Show Up</p>
+                  <p style="color:rgba(255,255,255,0.5);font-size:13px;line-height:1.6;margin:0;">Walk in on day one as a full member of the tribe. No asterisks.</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:32px 0 0 0;text-align:center;">
+            <p style="color:rgba(255,255,255,0.2);font-size:11px;line-height:1.6;margin:0;">
+              Honor Bound FIT · 45 Centreport Pkwy Suite 137 · Fredericksburg, VA 22406<br/>
+              <a href="https://honorboundfit.com" style="color:rgba(255,255,255,0.3);text-decoration:none;">honorboundfit.com</a>
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  return getResend().emails.send({
+    from: 'Honor Bound FIT <noreply@honorboundfit.com>',
+    to,
+    subject: 'F3 Application Received — Honor Bound FIT',
+    html,
+  });
+}
+
+export async function sendAdminF3Notification(opts: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  numberOfFosterChildren: number;
+  fosteringDuration: string;
+  agencyName?: string | null;
+  heardAboutUs?: string | null;
+  additionalNotes?: string | null;
+}) {
+  const {
+    firstName, lastName, email, phone, address, city, state, zip,
+    numberOfFosterChildren, fosteringDuration, agencyName, heardAboutUs, additionalNotes,
+  } = opts;
+
+  const row = (label: string, value: string) =>
+    `<tr>
+      <td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:12px;letter-spacing:2px;text-transform:uppercase;width:180px;vertical-align:top;">${label}</td>
+      <td style="padding:8px 0;color:#ffffff;font-size:14px;vertical-align:top;">${value || '—'}</td>
+    </tr>`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>New F3 Application</title>
+</head>
+<body style="margin:0;padding:0;background:#000000;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#000000;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+        <!-- Wordmark -->
+        <tr>
+          <td style="padding:0 0 32px 0;" align="center">
+            <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:42px;font-weight:900;letter-spacing:-1px;text-transform:uppercase;line-height:1;">
+              <span style="color:#1d4ed8;">HB</span><span style="color:#dc2626;">F</span><span style="color:#ffffff;">I</span><span style="color:#dc2626;">T</span>
+            </span>
+          </td>
+        </tr>
+
+        <!-- Header -->
+        <tr>
+          <td style="background:#dc2626;padding:20px 40px;">
+            <p style="color:#ffffff;font-size:11px;letter-spacing:4px;text-transform:uppercase;margin:0 0 6px 0;opacity:0.8;">Incoming Application</p>
+            <h1 style="color:#ffffff;font-size:24px;font-weight:900;text-transform:uppercase;margin:0;letter-spacing:1px;">
+              New F3 Application
+            </h1>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="background:#111111;border:1px solid #333333;border-top:0;padding:40px;">
+            <p style="color:rgba(255,255,255,0.5);font-size:14px;line-height:1.6;margin:0 0 28px 0;">
+              A new Foster Families Free application has been submitted and requires your review.
+            </p>
+
+            <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #222222;">
+              ${row('Name', `${firstName} ${lastName}`)}
+              ${row('Email', email)}
+              ${row('Phone', phone)}
+              ${row('Address', `${address}, ${city}, ${state} ${zip}`)}
+              ${row('Foster Children', String(numberOfFosterChildren))}
+              ${row('Fostering Duration', fosteringDuration)}
+              ${row('Agency', agencyName ?? '—')}
+              ${row('Heard About Us', heardAboutUs ?? '—')}
+              ${row('Notes', additionalNotes ?? '—')}
+            </table>
+
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:32px;">
+              <tr>
+                <td>
+                  <a href="mailto:${email}?subject=Re: F3 Foster Families Free Application"
+                     style="display:inline-block;background:#dc2626;color:#ffffff;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:3px;padding:14px 28px;text-decoration:none;">
+                    Reply to Applicant →
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:32px 0 0 0;text-align:center;">
+            <p style="color:rgba(255,255,255,0.2);font-size:11px;line-height:1.6;margin:0;">
+              Honor Bound FIT · 45 Centreport Pkwy Suite 137 · Fredericksburg, VA 22406
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  return getResend().emails.send({
+    from: 'Honor Bound FIT <noreply@honorboundfit.com>',
+    to: 'Rich@HonorBoundFIT.com',
+    subject: `New F3 Application — ${firstName} ${lastName}`,
+    html,
+  });
+}

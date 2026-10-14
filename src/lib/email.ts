@@ -1291,7 +1291,7 @@ export function sendDropInWelcomeEmail(opts: {
   });
 }
 
-// ── F3 — Foster Families Free Emails ─────────────────────────────────────────
+// ── F3 — Free for Foster Families Emails ─────────────────────────────────────────
 
 export async function sendF3ApplicationConfirmation(opts: {
   to: string;
@@ -1324,7 +1324,7 @@ export async function sendF3ApplicationConfirmation(opts: {
         <tr>
           <td style="background:#111111;border:1px solid #333333;padding:48px 40px;">
             <p style="color:#dc2626;font-size:11px;letter-spacing:4px;text-transform:uppercase;margin:0 0 16px 0;font-weight:700;">
-              Foster Families Free
+              Free for Foster Families
             </p>
             <h1 style="color:#ffffff;font-size:28px;font-weight:900;text-transform:uppercase;margin:0 0 24px 0;letter-spacing:1px;line-height:1.1;">
               Application Received, ${firstName}.
@@ -1474,7 +1474,7 @@ export async function sendAdminF3Notification(opts: {
         <tr>
           <td style="background:#111111;border:1px solid #333333;border-top:0;padding:40px;">
             <p style="color:rgba(255,255,255,0.5);font-size:14px;line-height:1.6;margin:0 0 28px 0;">
-              A new Foster Families Free application has been submitted and requires your review.
+              A new Free for Foster Families application has been submitted and requires your review.
             </p>
 
             <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #222222;">
@@ -1492,7 +1492,7 @@ export async function sendAdminF3Notification(opts: {
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:32px;">
               <tr>
                 <td>
-                  <a href="mailto:${email}?subject=Re: F3 Foster Families Free Application"
+                  <a href="mailto:${email}?subject=Re: F3 Free for Foster Families Application"
                      style="display:inline-block;background:#dc2626;color:#ffffff;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:3px;padding:14px 28px;text-decoration:none;">
                     Reply to Applicant →
                   </a>

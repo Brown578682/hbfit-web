@@ -12,11 +12,13 @@ import {
 interface CoreMetricsEntryProps {
   assessmentType: AssessmentType;
   checkInId?: string;
-  apiPath?: string;           // default: /api/member/core-metrics
+  apiPath?: string;
   initial?: Partial<CoreMetricsForm>;
+  ageFromDob?: number | null;        // when set, age field is read-only
+  heightFromRecord?: number | null;  // when set (age ≥ 21), height field is read-only
   onSaved?: (entry: Record<string, unknown>) => void;
   allowSkip?: boolean;
-  compact?: boolean;          // hide section headers + descriptions
+  compact?: boolean;
 }
 
 // ── Group fields by section ───────────────────────────────────────────────────
@@ -37,6 +39,8 @@ export default function CoreMetricsEntry({
   checkInId,
   apiPath = "/api/member/core-metrics",
   initial = {},
+  ageFromDob,
+  heightFromRecord,
   onSaved,
   allowSkip = true,
   compact = false,
@@ -138,6 +142,15 @@ export default function CoreMetricsEntry({
                     field={field}
                     value={form[field.key as keyof CoreMetricsForm]}
                     onChange={(val) => set(field.key as keyof CoreMetricsForm, val)}
+                    readOnly={
+                      (field.key === "age" && ageFromDob != null) ||
+                      (field.key === "heightIn" && heightFromRecord != null)
+                    }
+                    readOnlyNote={
+                      field.key === "age" ? "from your profile" :
+                      field.key === "heightIn" ? "from your last assessment" :
+                      undefined
+                    }
                   />
                 ))}
               </div>
@@ -182,10 +195,14 @@ function MetricInput({
   field,
   value,
   onChange,
+  readOnly = false,
+  readOnlyNote,
 }: {
   field: typeof CORE_METRIC_FIELDS[number];
   value: string;
   onChange: (val: string) => void;
+  readOnly?: boolean;
+  readOnlyNote?: string;
 }) {
   const placeholder =
     field.type === "time" ? "MM:SS" :
@@ -204,11 +221,22 @@ function MetricInput({
         type={field.type === "number" ? "number" : "text"}
         step={field.type === "number" ? "0.1" : undefined}
         min={field.type === "number" ? "0" : undefined}
-        className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm placeholder-zinc-600 focus:outline-none focus:border-red-600"
-        placeholder={placeholder}
+        readOnly={readOnly}
+        className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none ${
+          readOnly
+            ? "bg-zinc-800 border-zinc-700 text-zinc-400 cursor-default select-none focus:border-zinc-700"
+            : "bg-zinc-900 border-zinc-700 text-white placeholder-zinc-600 focus:border-red-600"
+        }`}
+        placeholder={readOnly ? "" : placeholder}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={readOnly ? undefined : (e) => onChange(e.target.value)}
+        title={readOnly ? (readOnlyNote ? `Auto-filled: ${readOnlyNote}` : "Auto-filled") : undefined}
       />
+      {readOnly && (
+        <p className="text-xs text-zinc-600 mt-0.5 font-lora italic">
+          {readOnlyNote ?? "from your profile"}
+        </p>
+      )}
     </div>
   );
 }

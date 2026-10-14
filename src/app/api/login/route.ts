@@ -5,13 +5,22 @@ import { encode } from 'next-auth/jwt'
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json()
+    const { email, username, password } = await req.json()
 
-    // Find user (case-insensitive)
-    const user = await prisma.user.findFirst({
-      where: { email: { equals: email, mode: 'insensitive' } },
-      select: { id: true, email: true, name: true, passwordHash: true, role: true },
-    })
+    // Support login by email OR username (for minor accounts)
+    let user: { id: string; email: string | null; username: string | null; name: string | null; passwordHash: string | null; role: string } | null = null
+
+    if (email) {
+      user = await prisma.user.findFirst({
+        where: { email: { equals: email.trim(), mode: 'insensitive' } },
+        select: { id: true, email: true, username: true, name: true, passwordHash: true, role: true },
+      })
+    } else if (username) {
+      user = await prisma.user.findFirst({
+        where: { username: { equals: username.trim(), mode: 'insensitive' } },
+        select: { id: true, email: true, username: true, name: true, passwordHash: true, role: true },
+      })
+    }
 
     if (!user || !user.passwordHash) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
@@ -22,14 +31,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 
-    // Build JWT token
+    // Build JWT token — use username as identifier if no email
     const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET!
     const token = await encode({
       token: {
-        sub: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
+        sub:      user.id,
+        email:    user.email ?? undefined,
+        name:     user.name,
+        role:     user.role,
       },
       secret,
       salt: process.env.NODE_ENV === 'production'
@@ -37,16 +46,16 @@ export async function POST(req: Request) {
         : 'authjs.session-token',
     })
 
-    const isProd = process.env.NODE_ENV === 'production'
+    const isProd     = process.env.NODE_ENV === 'production'
     const cookieName = isProd ? '__Secure-authjs.session-token' : 'authjs.session-token'
 
-    const res = NextResponse.json({ ok: true })
+    const res = NextResponse.json({ ok: true, role: user.role })
     res.cookies.set(cookieName, token, {
       httpOnly: true,
-      secure: isProd,
+      secure:   isProd,
       sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path:     '/',
+      maxAge:   60 * 60 * 24 * 30,
     })
 
     return res

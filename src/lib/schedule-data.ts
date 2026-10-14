@@ -3,26 +3,28 @@
 
 export type ScheduleSlot = {
   id: string
-  type: 'SC' | 'HH'           // SC = Strength & Conditioning, HH = Homeschool Heroes
+  type: 'SC' | 'HH' | 'OG' | 'TE'  // SC = Strength & Conditioning, HH = Homeschool Heroes, OG = Open Gym, TE = Tribal Elders
   typeName: string
   instructor: string
   time: string                 // display string e.g. "5:00 AM"
   startHour: number            // 24h hour
   startMinute: number
-  durationMin: number          // always 60
+  durationMin: number
   days: number[]               // 0=Sun, 1=Mon … 6=Sat
   capacity: number
 }
 
 export const SCHEDULE_DATA: ScheduleSlot[] = [
-  { id: 's1', type: 'SC', typeName: 'Strength & Conditioning Group Class', instructor: 'Heather Traves', time: '5:00 AM',  startHour: 5,  startMinute: 0,  durationMin: 60, days: [1,2,3,4,5], capacity: 12 },
-  { id: 's2', type: 'SC', typeName: 'Strength & Conditioning Group Class', instructor: 'Heather Traves', time: '6:00 AM',  startHour: 6,  startMinute: 0,  durationMin: 60, days: [1,2,3,4,5], capacity: 12 },
-  { id: 's3', type: 'SC', typeName: 'Strength & Conditioning Group Class', instructor: 'Heather Traves', time: '9:30 AM',  startHour: 9,  startMinute: 30, durationMin: 60, days: [1,2,3,4,5], capacity: 12 },
-  { id: 's4', type: 'HH', typeName: 'Homeschool Heroes',                  instructor: 'Randy Franklin',  time: '1:00 PM',  startHour: 13, startMinute: 0,  durationMin: 60, days: [2,4],       capacity: 10 },
-  { id: 's5', type: 'SC', typeName: 'Strength & Conditioning Group Class', instructor: 'Heather Traves', time: '4:00 PM',  startHour: 16, startMinute: 0,  durationMin: 60, days: [1,2,3,4,5], capacity: 12 },
-  { id: 's6', type: 'SC', typeName: 'Strength & Conditioning Group Class', instructor: 'Heather Traves', time: '5:00 PM',  startHour: 17, startMinute: 0,  durationMin: 60, days: [1,2,3,4,5], capacity: 12 },
-  { id: 's7', type: 'SC', typeName: 'Strength & Conditioning Group Class', instructor: 'Randy Franklin',  time: '6:00 PM',  startHour: 18, startMinute: 0,  durationMin: 60, days: [1,4],       capacity: 12 },
-  { id: 's8', type: 'SC', typeName: 'Strength & Conditioning Group Class', instructor: 'Randy Franklin',  time: '8:30 AM',  startHour: 8,  startMinute: 30, durationMin: 60, days: [6],         capacity: 12 },
+  { id: 's1',  type: 'SC', typeName: 'Strength & Conditioning Group Class', instructor: 'Heather Traves', time: '5:00 AM',  startHour: 5,  startMinute: 0,  durationMin: 60,  days: [1,2,3,4,5], capacity: 12 },
+  { id: 's2',  type: 'SC', typeName: 'Strength & Conditioning Group Class', instructor: 'Heather Traves', time: '6:00 AM',  startHour: 6,  startMinute: 0,  durationMin: 60,  days: [1,2,3,4,5], capacity: 12 },
+  { id: 'og1', type: 'OG', typeName: 'Open Gym',                            instructor: '',               time: '7:00 AM',  startHour: 7,  startMinute: 0,  durationMin: 150, days: [1,2,3,4,5], capacity: 30 },
+  { id: 's3',  type: 'SC', typeName: 'Strength & Conditioning Group Class', instructor: 'Heather Traves', time: '9:30 AM',  startHour: 9,  startMinute: 30, durationMin: 60,  days: [1,2,3,4,5], capacity: 12 },
+  { id: 'og2', type: 'OG', typeName: 'Open Gym',                            instructor: '',               time: '11:00 AM', startHour: 11, startMinute: 0,  durationMin: 120, days: [1,2,3,4,5], capacity: 30 },
+  { id: 's4',  type: 'HH', typeName: 'Homeschool Heroes',                  instructor: 'Randy Franklin',  time: '1:00 PM',  startHour: 13, startMinute: 0,  durationMin: 60,  days: [2,4],       capacity: 10 },
+  { id: 'og3', type: 'OG', typeName: 'Open Gym',                            instructor: '',               time: '2:00 PM',  startHour: 14, startMinute: 0,  durationMin: 120, days: [1,2,3,4,5], capacity: 30 },
+  { id: 's6',  type: 'SC', typeName: 'Strength & Conditioning Group Class', instructor: 'Heather Traves', time: '5:00 PM',  startHour: 17, startMinute: 0,  durationMin: 60,  days: [1,2,3,4,5], capacity: 12 },
+  { id: 's7',  type: 'SC', typeName: 'Strength & Conditioning Group Class', instructor: 'Randy Franklin',  time: '6:00 PM',  startHour: 18, startMinute: 0,  durationMin: 60,  days: [1,4],       capacity: 12 },
+  { id: 's8',  type: 'SC', typeName: 'Strength & Conditioning Group Class', instructor: 'Randy Franklin',  time: '8:30 AM',  startHour: 8,  startMinute: 30, durationMin: 60,  days: [6],         capacity: 12 },
 ]
 
 // Given a slot + a specific date, return start/end DateTime in UTC

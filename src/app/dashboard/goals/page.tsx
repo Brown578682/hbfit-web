@@ -54,6 +54,8 @@ export default function GoalsPage() {
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMemberGoals[]>([]);
   const [householdLoaded, setHouseholdLoaded] = useState(false);
 
+  const handleGoalSelectorChange = useCallback((goals: SelectedGoal[]) => setSelected(goals), []);
+
   useEffect(() => {
     fetch("/api/member/goals")
       .then((r) => r.json())
@@ -267,7 +269,7 @@ export default function GoalsPage() {
             <p className="text-zinc-400 text-sm">
               Select up to 5 goals to add to your active list. Your coaches will see these and tailor their guidance accordingly.
             </p>
-            <GoalSelector onChange={useCallback((goals: SelectedGoal[]) => setSelected(goals), [])} />
+            <GoalSelector onChange={handleGoalSelectorChange} />
             {selected.length > 0 && (
               <div className="sticky bottom-6 pt-4">
                 <button type="button" onClick={saveGoals} disabled={saving}

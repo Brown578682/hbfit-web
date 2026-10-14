@@ -29,11 +29,20 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (!member || !member.memberPinHash) {
+    if (!member) {
       return NextResponse.json({ error: "Invalid code or PIN" }, { status: 401 });
     }
 
-    if (member.status !== "ACTIVE" && member.status !== "TRIALING" as any) {
+    if (!member.memberPinHash) {
+      // Member exists but has no PIN — prompt them to create one via the member portal
+      return NextResponse.json({
+        error: "no_pin",
+        message: "No PIN set. Please log in to your member portal to create one.",
+        firstName: member.firstName,
+      }, { status: 403 });
+    }
+
+    if (member.status !== "ACTIVE" && member.status !== "TRIALING" as any && member.status !== "LEAD") {
       return NextResponse.json({ error: "Membership is not active" }, { status: 403 });
     }
 
@@ -50,6 +59,7 @@ export async function POST(req: NextRequest) {
         lastName: member.lastName,
         memberCode: member.memberCode,
         householdId: member.householdId,
+        status: member.status,
       },
     });
   } catch (err) {

@@ -24,6 +24,15 @@ export async function POST(req: NextRequest) {
       data: { passwordHash },
     });
 
+    // If this member is MIGRATING, promote them to ACTIVE now that they've set up their account
+    await prisma.member.updateMany({
+      where: {
+        user: { email: { equals: email, mode: 'insensitive' } },
+        status: 'MIGRATING',
+      },
+      data: { status: 'ACTIVE' },
+    });
+
     return NextResponse.json({ ok: true, email });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Something went wrong.';

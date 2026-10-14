@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getSession } from '@/lib/session'
 
-// ZIP centroid cache (add more as needed — Fredericksburg area focus)
+// ZIP centroid cache (Fredericksburg area focus)
 const ZIP_COORDS: Record<string, [number, number]> = {
   '22401': [38.3032, -77.4605], '22405': [38.3282, -77.3851], '22406': [38.3956, -77.4397],
   '22407': [38.2693, -77.5188], '22408': [38.2401, -77.4571], '22551': [38.1965, -77.8134],
@@ -16,25 +17,43 @@ const ZIP_COORDS: Record<string, [number, number]> = {
 }
 
 export async function GET() {
+  // Manager-only — ADMIN role required
+  const session = await getSession()
+  if (!session || session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  }
+
+  // Fetch household primaries (and solo members with no household) with a zip
   const members = await prisma.member.findMany({
-    select: { zip: true, status: true },
-    where: { zip: { not: null } },
+    where: {
+      zip: { not: null },
+      OR: [
+        { isHouseholdPrimary: true },
+        { householdId: null },
+      ],
+    },
+    select: {
+      firstName: true,
+      lastName: true,
+      zip: true,
+      status: true,
+    },
   })
 
-  // Aggregate by zip + status, no PII
-  const byZip: Record<string, { zip: string; lat?: number; lng?: number; active: number; lead: number; inactive: number }> = {}
+  const result: { name: string; zip: string; status: string; lat: number; lng: number }[] = []
 
   for (const m of members) {
     const zip = m.zip?.trim().slice(0, 5) ?? ''
-    if (!zip) continue
-    if (!byZip[zip]) {
-      const coords = ZIP_COORDS[zip]
-      byZip[zip] = { zip, lat: coords?.[0], lng: coords?.[1], active: 0, lead: 0, inactive: 0 }
-    }
-    if (m.status === 'ACTIVE') byZip[zip].active++
-    else if (m.status === 'LEAD' || m.status === 'VISITOR' || m.status === 'PENDING') byZip[zip].lead++
-    else byZip[zip].inactive++
+    const coords = ZIP_COORDS[zip]
+    if (!zip || !coords) continue
+    result.push({
+      name: `${m.firstName} ${m.lastName}`,
+      zip,
+      status: m.status,
+      lat: coords[0],
+      lng: coords[1],
+    })
   }
 
-  return NextResponse.json(Object.values(byZip).filter(z => z.lat && z.lng))
+  return NextResponse.json(result)
 }

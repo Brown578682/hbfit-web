@@ -27,12 +27,19 @@ function LoginForm() {
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(email.includes('@') ? { email, password } : { username: email, password }),
       })
 
       if (res.ok) {
+        const data = await res.json()
         const from = searchParams.get('from')
-        router.push(from === 'admin' ? '/admin' : '/dashboard')
+        if (data.role === 'COACH' || data.role === 'ADMIN') {
+          router.push('/coach')
+        } else if (from === 'admin') {
+          router.push('/admin')
+        } else {
+          router.push('/dashboard')
+        }
         router.refresh()
       } else {
         setError('Invalid email or password.')
@@ -60,11 +67,11 @@ function LoginForm() {
             </div>
           )}
           <div>
-            <label className="text-white/60 text-xs uppercase tracking-wider block mb-1.5">Email</label>
+            <label className="text-white/60 text-xs uppercase tracking-wider block mb-1.5">Email or Username</label>
             <input
-              type="email" required value={email} onChange={e => setEmail(e.target.value)}
+              type="text" required value={email} onChange={e => setEmail(e.target.value)}
               className="w-full bg-zinc-900 border border-white/20 text-white px-4 py-3 focus:outline-none focus:border-white/50 text-sm"
-              placeholder="you@example.com"
+              placeholder="you@example.com or username"
             />
           </div>
           <div>
@@ -91,6 +98,9 @@ function LoginForm() {
         </form>
 
         <div className="mt-8 text-center space-y-3">
+          <NextLink href="/forgot-password" className="text-white/40 text-xs hover:text-white/70 transition-colors block">
+            Forgot your password?
+          </NextLink>
           <p className="text-white/30 text-xs">Not a member yet?</p>
           <NextLink href="/join" className="text-white text-sm underline underline-offset-2 hover:text-white/70 transition-colors">
             Join Honor Bound FIT →

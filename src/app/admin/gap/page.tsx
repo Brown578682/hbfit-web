@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { ShieldCheck, FileText, CheckCircle2, XCircle } from "lucide-react";
+import { ShieldCheck, FileText, CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -16,6 +16,16 @@ interface GapApplicant {
   gapDocumentUrl: string | null;
 }
 
+interface AwaitingBillingMember {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  approvedAt: string;
+  gapVerifiedBy: string;
+}
+
 // ── Toast ──────────────────────────────────────────────────────────────────────
 
 interface Toast {
@@ -28,6 +38,7 @@ interface Toast {
 
 export default function GapPage() {
   const [applicants, setApplicants] = useState<GapApplicant[]>([]);
+  const [awaitingBilling, setAwaitingBilling] = useState<AwaitingBillingMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -45,6 +56,7 @@ export default function GapPage() {
       const res = await fetch("/api/admin/gap");
       const data = await res.json();
       setApplicants(data.applicants ?? []);
+      setAwaitingBilling(data.awaitingBilling ?? []);
     } catch {
       showToast("Failed to load applicants", "error");
     } finally {
@@ -66,7 +78,9 @@ export default function GapPage() {
       });
       if (!res.ok) throw new Error("Failed");
       setApplicants((prev) => prev.filter((a) => a.id !== id));
-      showToast(`✓ ${name} approved — membership activated`, "success");
+      showToast(`✓ ${name} approved — billing setup email sent`, "success");
+      // Reload to pick up awaitingBilling
+      load();
     } catch {
       showToast(`Failed to approve ${name}`, "error");
     } finally {
@@ -93,6 +107,21 @@ export default function GapPage() {
     }
   };
 
+  const handleResendBilling = async (id: string, name: string) => {
+    setActionLoading(id + "-resend");
+    try {
+      const res = await fetch(`/api/admin/gap/${id}/resend-billing`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed");
+      showToast(`✓ Billing setup email resent to ${name}`, "success");
+    } catch {
+      showToast(`Failed to resend billing link to ${name}`, "error");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString("en-US", {
       month: "long",
@@ -109,7 +138,7 @@ export default function GapPage() {
   };
 
   return (
-    <div className="p-8 space-y-8 max-w-5xl mx-auto">
+    <div className="p-8 space-y-10 max-w-5xl mx-auto">
       {/* Toasts */}
       <div className="fixed top-4 right-4 z-50 space-y-2">
         {toasts.map((t) => (
@@ -135,116 +164,178 @@ export default function GapPage() {
           </h1>
         </div>
         <p className="font-lora text-zinc-400 mt-1 ml-11">
-          Review and approve Government Assistance Program applications.
+          Review and approve Guardian Angel Program applications.
         </p>
       </div>
 
-      {/* Count badge */}
-      {!loading && (
-        <div className="flex items-center gap-3">
-          <span
-            className={`px-3 py-1 rounded-full text-sm font-montserrat font-semibold ${
-              applicants.length > 0
-                ? "bg-yellow-400/10 text-yellow-400"
-                : "bg-green-400/10 text-green-400"
-            }`}
-          >
-            {applicants.length === 0
-              ? "All caught up"
-              : `${applicants.length} pending application${applicants.length !== 1 ? "s" : ""}`}
-          </span>
-        </div>
-      )}
-
-      {/* Content */}
       {loading ? (
         <div className="text-center py-20 text-zinc-500 font-lora">
-          Loading applicants…
-        </div>
-      ) : applicants.length === 0 ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-16 text-center">
-          <CheckCircle2 className="text-green-400 mx-auto mb-4" size={40} />
-          <p className="font-montserrat font-bold text-lg text-white">
-            No pending GAP applications
-          </p>
-          <p className="font-lora text-zinc-500 mt-2">
-            All GAP applications have been reviewed. Check back later.
-          </p>
+          Loading…
         </div>
       ) : (
-        <div className="grid gap-4">
-          {applicants.map((a) => {
-            const name = `${a.firstName} ${a.lastName}`;
-            const isActioning = actionLoading?.startsWith(a.id);
-            return (
-              <div
-                key={a.id}
-                className={`bg-zinc-900 border border-zinc-800 rounded-xl p-6 transition-opacity ${
-                  isActioning ? "opacity-60 pointer-events-none" : ""
+        <>
+          {/* ── Pending Applications ─────────────────────────────────────── */}
+          <section className="space-y-4">
+            <div className="flex items-center gap-3">
+              <h2 className="font-montserrat font-bold text-lg text-white">Pending Review</h2>
+              <span
+                className={`px-3 py-1 rounded-full text-sm font-montserrat font-semibold ${
+                  applicants.length > 0
+                    ? "bg-yellow-400/10 text-yellow-400"
+                    : "bg-green-400/10 text-green-400"
                 }`}
               >
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                  {/* Info */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-montserrat font-bold text-lg text-white">
-                        {name}
-                      </h3>
-                      {a.gapCategory && (
-                        <span className="bg-yellow-400/10 text-yellow-400 text-xs font-montserrat font-semibold px-2 py-0.5 rounded-full">
-                          {formatCategory(a.gapCategory)}
-                        </span>
-                      )}
-                    </div>
-                    <p className="font-lora text-sm text-zinc-400">{a.email}</p>
-                    {a.phone && (
-                      <p className="font-lora text-sm text-zinc-400">{a.phone}</p>
-                    )}
-                    <p className="font-lora text-xs text-zinc-500">
-                      Applied {formatDate(a.joinedAt)}
-                    </p>
-                    {a.gapDocumentUrl && (
-                      <a
-                        href={a.gapDocumentUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-montserrat font-semibold transition-colors mt-1"
-                      >
-                        <FileText size={13} />
-                        View Supporting Document
-                      </a>
-                    )}
-                    {!a.gapDocumentUrl && (
-                      <p className="text-xs text-zinc-600 font-lora italic mt-1">
-                        No document uploaded
-                      </p>
-                    )}
-                  </div>
+                {applicants.length === 0
+                  ? "All caught up"
+                  : `${applicants.length} pending`}
+              </span>
+            </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => handleApprove(a.id, name)}
-                      disabled={isActioning}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-green-600 hover:bg-green-500 text-white font-montserrat text-sm font-bold transition-colors disabled:opacity-50"
-                    >
-                      <CheckCircle2 size={15} />
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleDeny(a.id, name)}
-                      disabled={isActioning}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-zinc-800 hover:bg-red-700 border border-zinc-700 hover:border-red-600 text-zinc-300 hover:text-white font-montserrat text-sm font-bold transition-colors disabled:opacity-50"
-                    >
-                      <XCircle size={15} />
-                      Deny
-                    </button>
-                  </div>
-                </div>
+            {applicants.length === 0 ? (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-10 text-center">
+                <CheckCircle2 className="text-green-400 mx-auto mb-3" size={36} />
+                <p className="font-montserrat font-bold text-base text-white">
+                  No pending applications
+                </p>
+                <p className="font-lora text-zinc-500 mt-1 text-sm">
+                  All GAP applications have been reviewed.
+                </p>
               </div>
-            );
-          })}
-        </div>
+            ) : (
+              <div className="grid gap-4">
+                {applicants.map((a) => {
+                  const name = `${a.firstName} ${a.lastName}`;
+                  const isActioning = actionLoading?.startsWith(a.id);
+                  return (
+                    <div
+                      key={a.id}
+                      className={`bg-zinc-900 border border-zinc-800 rounded-xl p-6 transition-opacity ${
+                        isActioning ? "opacity-60 pointer-events-none" : ""
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4 flex-wrap">
+                        {/* Info */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-montserrat font-bold text-lg text-white">
+                              {name}
+                            </h3>
+                            {a.gapCategory && (
+                              <span className="bg-yellow-400/10 text-yellow-400 text-xs font-montserrat font-semibold px-2 py-0.5 rounded-full">
+                                {formatCategory(a.gapCategory)}
+                              </span>
+                            )}
+                          </div>
+                          <p className="font-lora text-sm text-zinc-400">{a.email}</p>
+                          {a.phone && (
+                            <p className="font-lora text-sm text-zinc-400">{a.phone}</p>
+                          )}
+                          <p className="font-lora text-xs text-zinc-500">
+                            Applied {formatDate(a.joinedAt)}
+                          </p>
+                          {a.gapDocumentUrl && !a.gapDocumentUrl.startsWith('/tmp') && !a.gapDocumentUrl.startsWith('/var') ? (
+                            <a
+                              href={`/api/admin/gap/document/${a.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-montserrat font-semibold transition-colors mt-1"
+                            >
+                              <FileText size={13} />
+                              View Supporting Document
+                            </a>
+                          ) : a.gapDocumentUrl?.startsWith('/tmp') || a.gapDocumentUrl?.startsWith('/var') ? (
+                            <p className="text-xs text-amber-500/80 font-lora italic mt-1">
+                              ⚠ Document stored locally (dev) — ask member to re-upload
+                            </p>
+                          ) : (
+                            <p className="text-xs text-zinc-600 font-lora italic mt-1">
+                              No document uploaded
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => handleApprove(a.id, name)}
+                            disabled={isActioning}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-green-600 hover:bg-green-500 text-white font-montserrat text-sm font-bold transition-colors disabled:opacity-50"
+                          >
+                            <CheckCircle2 size={15} />
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleDeny(a.id, name)}
+                            disabled={isActioning}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-zinc-800 hover:bg-red-700 border border-zinc-700 hover:border-red-600 text-zinc-300 hover:text-white font-montserrat text-sm font-bold transition-colors disabled:opacity-50"
+                          >
+                            <XCircle size={15} />
+                            Deny
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {/* ── Awaiting Billing ─────────────────────────────────────────── */}
+          {awaitingBilling.length > 0 && (
+            <section className="space-y-4">
+              <div className="flex items-center gap-3">
+                <h2 className="font-montserrat font-bold text-lg text-white">
+                  Approved — Awaiting Billing Setup
+                </h2>
+                <span className="px-3 py-1 rounded-full text-sm font-montserrat font-semibold bg-orange-400/10 text-orange-400">
+                  {awaitingBilling.length} member{awaitingBilling.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <p className="font-lora text-sm text-zinc-500">
+                These members are approved but haven&apos;t completed billing yet.
+                Use &ldquo;Resend&rdquo; to send them a fresh billing setup link.
+              </p>
+
+              <div className="grid gap-3">
+                {awaitingBilling.map((m) => {
+                  const name = `${m.firstName} ${m.lastName}`;
+                  const isActioning = actionLoading === m.id + "-resend";
+                  return (
+                    <div
+                      key={m.id}
+                      className={`bg-zinc-900 border border-orange-500/20 rounded-xl p-5 flex items-center justify-between gap-4 flex-wrap transition-opacity ${
+                        isActioning ? "opacity-60 pointer-events-none" : ""
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Clock size={14} className="text-orange-400" />
+                          <span className="font-montserrat font-bold text-white">{name}</span>
+                          <span className="text-xs text-orange-400 font-montserrat font-semibold bg-orange-400/10 px-2 py-0.5 rounded-full">
+                            No billing
+                          </span>
+                        </div>
+                        <p className="font-lora text-sm text-zinc-400">{m.email}</p>
+                        <p className="font-lora text-xs text-zinc-500">
+                          Approved {formatDate(m.approvedAt)} by {m.gapVerifiedBy}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleResendBilling(m.id, name)}
+                        disabled={isActioning}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white font-montserrat text-sm font-semibold transition-colors disabled:opacity-50"
+                      >
+                        <RefreshCw size={14} className={isActioning ? "animate-spin" : ""} />
+                        Resend Billing Link
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+        </>
       )}
     </div>
   );

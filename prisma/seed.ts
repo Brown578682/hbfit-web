@@ -355,7 +355,7 @@ async function main() {
 
   console.log("\n🌱 Seeding Membership Plans...");
   const plans = [
-    { slug: "base", name: "Base Membership", monthlyPrice: 100_00, stripePriceId: "price_1TvlxvLg281PLi1sXGjqVF2S", isGap: false, requiresApproval: false, sortOrder: 0 },
+    { slug: "base", name: "Unlimited Membership", monthlyPrice: 100_00, stripePriceId: "price_1TvlxvLg281PLi1sXGjqVF2S", isGap: false, requiresApproval: false, sortOrder: 0 },
     { slug: "gap-veteran", name: "GAP Program — Veteran", monthlyPrice: 75_00, stripePriceId: "price_1TvlxzLg281PLi1svslpa5iN", isGap: true, requiresApproval: true, sortOrder: 1 },
     { slug: "gap-active", name: "GAP Program — Active Duty / Guard / Reserve", monthlyPrice: 75_00, stripePriceId: "price_1Tvly5Lg281PLi1sUE7gt2PP", isGap: true, requiresApproval: true, sortOrder: 2 },
     { slug: "gap-first-responder", name: "GAP Program — First Responder", monthlyPrice: 75_00, stripePriceId: "price_1Tvly9Lg281PLi1s9KylEiZ0", isGap: true, requiresApproval: true, sortOrder: 3 },

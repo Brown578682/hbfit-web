@@ -31,10 +31,12 @@ export async function middleware(req: NextRequest) {
   const isLoggedIn = !!token
   const userRole = token?.role as string | undefined
 
-  // /admin — ADMIN only
+  // /admin — ADMIN only, with coach-accessible exceptions
   if (nextUrl.pathname.startsWith('/admin')) {
+    const coachAllowed = ['/admin/billing', '/admin/messages', '/admin/reports'].some(p => nextUrl.pathname.startsWith(p))
     if (!isLoggedIn) return NextResponse.redirect(new URL('/login?from=admin', nextUrl))
-    if (userRole !== 'ADMIN') return NextResponse.redirect(new URL('/', nextUrl))
+    if (userRole !== 'ADMIN' && !(coachAllowed && userRole === 'COACH'))
+      return NextResponse.redirect(new URL('/', nextUrl))
   }
 
   // /coach — COACH or ADMIN
@@ -53,9 +55,10 @@ export async function middleware(req: NextRequest) {
     if (!isLoggedIn) return NextResponse.redirect(new URL('/login', nextUrl))
   }
 
-  // /api/admin — ADMIN only
+  // /api/admin — ADMIN only, with coach-accessible exceptions
   if (nextUrl.pathname.startsWith('/api/admin')) {
-    if (!isLoggedIn || userRole !== 'ADMIN')
+    const coachAllowed = ['/api/admin/billing', '/api/admin/messages', '/api/admin/reports', '/api/admin/booth'].some(p => nextUrl.pathname.startsWith(p))
+    if (!isLoggedIn || (userRole !== 'ADMIN' && !(coachAllowed && userRole === 'COACH')))
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

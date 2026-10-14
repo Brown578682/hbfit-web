@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     id: m.id,
     firstName: m.firstName,
     lastName: m.lastName,
-    email: m.user.email,
+    email: m.user?.email ?? '',
     phone: m.phone ?? "",
     status: m.status,
     joinedAt: m.joinedAt.toISOString(),

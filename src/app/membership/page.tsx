@@ -33,7 +33,7 @@ const PLAN_DETAILS = [
     cta: "Apply",
     ctaHref: "/join?plan=gap",
     features: [
-      "Same full access as Base Membership",
+      "Same full access as Unlimited Membership",
       "Veterans, active duty & first responders",
       "Simple document upload at signup",
       "Approved within 24 hrs — billing starts then",
@@ -84,6 +84,21 @@ const PLAN_DETAILS = [
       "No contracts — cancel anytime",
     ],
     note: "Open Gym windows only — not group classes",
+  },
+  {
+    slug: "drop-in",
+    badge: null,
+    featured: false,
+    kicker: "No Commitment",
+    cta: "Buy Now",
+    ctaHref: "/drop-in",
+    features: [
+      "Drop-In: $10 — single class, 1 credit",
+      "10-Class Pack: $50 — save 50% vs. drop-in",
+      "Credits never expire",
+      "Book through the schedule like any member",
+    ],
+    note: "One-time purchase — no subscription required",
   },
 ];
 
@@ -139,7 +154,7 @@ export default function MembershipPage() {
       <section className="py-16 px-4" id="plans">
         <div className="max-w-5xl mx-auto">
 
-          {/* Featured: Base Membership — full width */}
+          {/* Featured: Unlimited Membership — full width */}
           {(() => {
             const d = PLAN_DETAILS.find(p => p.slug === "base")!;
             const plan = MEMBERSHIP_PLANS.find(p => p.slug === "base")!;
@@ -158,7 +173,7 @@ export default function MembershipPage() {
                       <span className="text-white/40 text-sm mb-2">/ 4 wks</span>
                     </div>
                     <h2 className="font-montserrat font-extrabold text-white uppercase text-xl mb-6">
-                      Base Membership
+                      Unlimited Membership
                     </h2>
                     <ul className="space-y-3 border-t border-white/10 pt-6">
                       {d.features.map((item) => (
@@ -184,7 +199,7 @@ export default function MembershipPage() {
 
           {/* Other Plans — 2x2 grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {PLAN_DETAILS.filter(d => d.slug !== "base").map((d) => {
+            {PLAN_DETAILS.filter(d => d.slug !== "base" && d.slug !== "drop-in").map((d) => {
               const plan = MEMBERSHIP_PLANS.find(p => p.slug === d.slug)!;
               return (
                 <div
@@ -230,6 +245,33 @@ export default function MembershipPage() {
               );
             })}
           </div>
+
+          {/* Drop-In / 10-Pack card — full width below grid */}
+          {(() => {
+            const d = PLAN_DETAILS.find(p => p.slug === "drop-in")!;
+            return (
+              <div className="mt-4 border border-white/10 bg-white/5 p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+                <div className="flex-1">
+                  <p className="text-white/40 text-xs font-montserrat font-bold uppercase tracking-widest mb-1">{d.kicker}</p>
+                  <h3 className="font-montserrat font-extrabold text-white uppercase text-lg mb-2">Drop-In &amp; Class Packs</h3>
+                  <ul className="space-y-1">
+                    {d.features.map(f => (
+                      <li key={f} className="text-white/50 text-sm flex items-center gap-2">
+                        <span className="text-white/20">–</span> {f}
+                      </li>
+                    ))}
+                  </ul>
+                  {d.note && <p className="text-white/30 text-xs mt-3 flex items-center gap-1.5"><span>⚑</span>{d.note}</p>}
+                </div>
+                <Link
+                  href={d.ctaHref}
+                  className="shrink-0 block border border-white/30 text-white font-montserrat font-bold text-xs uppercase tracking-widest px-8 py-3 hover:border-white hover:bg-white/5 transition-colors text-center"
+                >
+                  {d.cta} →
+                </Link>
+              </div>
+            );
+          })()}
 
         </div>
       </section>
@@ -277,6 +319,37 @@ export default function MembershipPage() {
       <div id="gap" />
       <div id="homeschool" />
       <div id="tribal-elders" />
+
+      {/* ── DEP Poolee ───────────────────────────────────────────────────── */}
+      <section className="py-16 px-4 border-t border-white/10">
+        <div className="max-w-4xl mx-auto">
+          <div className="border border-blue-800 bg-blue-950/20 p-8 sm:p-10">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+              <div className="flex-1">
+                <p className="text-blue-400 text-xs font-montserrat font-bold uppercase tracking-widest mb-3">
+                  Military Poolees (DEP)
+                </p>
+                <h2 className="font-montserrat font-black text-3xl uppercase tracking-tight text-white mb-3">
+                  Serving Before You Ship
+                </h2>
+                <p className="text-zinc-400 text-sm leading-relaxed max-w-xl">
+                  If you're active in the Delayed Entry Program, your Honor Bound FIT membership is{' '}
+                  <strong className="text-white">completely free</strong> — for as long as you remain in the DEP.
+                  Full class access. No monthly fee. We train you before you ship.
+                </p>
+              </div>
+              <div className="shrink-0">
+                <a
+                  href="/join/poolee"
+                  className="block bg-blue-700 hover:bg-blue-600 text-white font-montserrat font-bold text-xs uppercase tracking-widest px-8 py-4 text-center transition-colors"
+                >
+                  Request Free Access →
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* ── FAQ ───────────────────────────────────────────── */}
       <section className="bg-zinc-950 border-t border-white/10 py-16 px-4">

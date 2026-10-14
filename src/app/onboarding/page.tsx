@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, ChevronRight, ChevronLeft, SkipForward } from "lucide-react";
 import GoalSelector, { type SelectedGoal } from "@/components/GoalSelector";
+import { HBFITWordmark } from "@/components/HBFITMark";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface FormData {
@@ -212,13 +213,13 @@ export default function OnboardingPage() {
   const progress = ((step - 1) / (TOTAL_STEPS - 1)) * 100;
   const isSkippable = step >= 2 && step <= TOTAL_STEPS;
 
+  const handleGoalSelectorChange = useCallback((goals: SelectedGoal[]) => setSelectedGoals(goals), []);
+
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
       {/* Header */}
       <header className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
-        <span className="font-montserrat text-lg font-black tracking-widest uppercase">
-          Honor Bound <span className="text-red-500">FIT</span>
-        </span>
+        <HBFITWordmark className="font-montserrat text-lg font-black tracking-widest uppercase" />
         <span className="text-zinc-500 text-sm font-montserrat">
           Step {step} of {TOTAL_STEPS}
         </span>
@@ -397,7 +398,7 @@ export default function OnboardingPage() {
 
               <GoalSelector
                 initial={selectedGoals}
-                onChange={useCallback((goals: SelectedGoal[]) => setSelectedGoals(goals), [])}
+                onChange={handleGoalSelectorChange}
               />
 
               <div className="border-t border-zinc-800 pt-6 space-y-4">

@@ -213,7 +213,7 @@ export default function F3ApplyPage() {
       <section className="relative bg-black border-b border-zinc-900 pt-28 pb-16 px-6">
         <div className="max-w-3xl mx-auto text-center">
           <p className="font-montserrat text-xs tracking-[0.25em] uppercase text-red-600 mb-4">
-            Foster Families Free
+            Free for Foster Families
           </p>
           <h1 className="font-montserrat font-black text-5xl md:text-6xl uppercase tracking-tight mb-6 leading-none">
             APPLY NOW

@@ -5,12 +5,16 @@ import {
   CalendarDays, CheckCircle2, CreditCard, Dumbbell,
   History, Trophy, ClipboardList, AlertCircle,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { useView } from '@/app/coach/view-context'
 
 // Mirrors the member dashboard but fetches data for a specific member (via coach API)
 export default function MemberViewPage() {
   const { memberId } = useParams<{ memberId: string }>()
+  const { mode } = useView()
   const [member, setMember] = useState<any>(null)
   const [checkIns, setCheckIns] = useState<any[]>([])
+  const [transactions, setTransactions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -18,9 +22,11 @@ export default function MemberViewPage() {
     Promise.all([
       fetch(`/api/coach/members/${memberId}`).then(r => r.json()),
       fetch(`/api/coach/members/${memberId}/checkins`).then(r => r.json()).catch(() => []),
-    ]).then(([m, ci]) => {
+      fetch(`/api/coach/members/${memberId}/transactions`).then(r => r.json()).catch(() => []),
+    ]).then(([m, ci, tx]) => {
       setMember(m)
       setCheckIns(Array.isArray(ci) ? ci : [])
+      setTransactions(Array.isArray(tx) ? tx : [])
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [memberId])
@@ -124,8 +130,48 @@ export default function MemberViewPage() {
         </div>
       )}
 
+      {/* Transactions — manager only */}
+      {mode === 'manager' && (
+        <section className="mt-8">
+          <h2 className="font-montserrat text-xs uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2">
+            <CreditCard size={13} /> Transactions (Last 90 Days)
+          </h2>
+          {transactions.length === 0 ? (
+            <p className="text-zinc-600 text-sm font-montserrat">No transactions found.</p>
+          ) : (
+            <div className="space-y-2">
+              {transactions.map(tx => {
+                const date = new Date(tx.date * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                const net = tx.amount - tx.amountRefunded
+                return (
+                  <div key={tx.id} className="flex items-center justify-between border border-zinc-800 bg-zinc-900/50 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-montserrat text-white">{tx.description ?? 'Charge'}</p>
+                      <p className="text-xs text-zinc-500 font-montserrat">{date}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className={cn('text-sm font-montserrat font-bold', tx.status === 'succeeded' ? 'text-green-400' : 'text-red-400')}>
+                        ${net.toFixed(2)}
+                      </p>
+                      {tx.amountRefunded > 0 && (
+                        <p className="text-xs text-amber-400 font-montserrat">↩ ${tx.amountRefunded.toFixed(2)} refunded</p>
+                      )}
+                      {tx.receiptUrl && (
+                        <a href={tx.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 font-montserrat">
+                          Receipt ↗
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Member details */}
-      <div className="bg-zinc-900 border border-zinc-800 p-6">
+      <div className="bg-zinc-900 border border-zinc-800 p-6 mt-8">
         <h2 className="font-montserrat font-bold text-sm uppercase tracking-wide mb-4">Member Details</h2>
         <dl className="space-y-3 text-sm">
           {[

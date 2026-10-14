@@ -29,7 +29,7 @@ async function getInitialData() {
     id: m.id,
     firstName: m.firstName,
     lastName: m.lastName,
-    email: m.user.email,
+    email: m.user?.email ?? '',
     phone: m.phone ?? "",
     status: m.status as string,
     joinedAt: m.joinedAt.toISOString(),

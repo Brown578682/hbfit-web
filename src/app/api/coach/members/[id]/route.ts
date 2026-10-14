@@ -28,5 +28,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return rest
   })
 
+  // Map currentPlan so member-view page renders correctly (matches coach/members list API shape)
+  const activeMembership = safe.memberships.find((m: any) => m.status === 'ACTIVE') ?? safe.memberships[0] ?? null
+  safe.currentPlan = activeMembership?.plan ?? null
+
   return NextResponse.json(safe)
 }

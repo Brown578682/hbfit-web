@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
 
   for (const ci of upcoming) {
     const label = ci.type.replace("DAY", "Day ");
+    if (!ci.member.userId) continue; // no portal user — skip push
     await sendPushToUser(ci.member.userId, {
       title: `📋 Your ${label} Check-In is Tomorrow`,
       body: "Log your progress, wins, and notes. Takes 2 minutes.",
@@ -50,6 +51,7 @@ export async function GET(req: NextRequest) {
     const label = ci.type.replace("DAY", "Day ");
     const daysOverdue = Math.floor((today.getTime() - new Date(ci.scheduledDate).getTime()) / 86400000);
     if (daysOverdue > 7) continue; // Don't nag after a week
+    if (!ci.member.userId) continue; // no portal user — skip push
     await sendPushToUser(ci.member.userId, {
       title: `⏰ ${label} Check-In Waiting`,
       body: `Your check-in was ${daysOverdue} day${daysOverdue > 1 ? "s" : ""} ago. Don't skip the debrief.`,

@@ -1,9 +1,13 @@
 "use client";
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Menu, X, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// Routes that have their own full-page layouts — suppress the public nav
+const APP_ROUTE_PREFIXES = ["/coach", "/dashboard", "/admin", "/onboarding", "/set-password", "/kiosk", "/login"];
 
 // Hero Tree is only shown in the nav during December (11) and January (0)
 const month = new Date().getMonth();
@@ -13,6 +17,8 @@ const NAV_LINKS = [
   { href: "/about", label: "About" },
   { href: "/schedule", label: "Schedule" },
   { href: "/membership", label: "Membership" },
+  { href: "/f3", label: "F3" },
+  { href: "/corporate-wellness", label: "Corporate Wellness" },
   { href: "/events", label: "Events" },
   { href: "/core-values", label: "Core Values" },
   ...(isHeroTreeSeason ? [{ href: "/hero-tree", label: "Hero Tree" }] : []),
@@ -23,6 +29,10 @@ const NAV_LINKS = [
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  // Don't render the public navbar inside app-specific layouts
+  if (APP_ROUTE_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return null;
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-sm border-b border-white/10">
@@ -67,6 +77,12 @@ export function Navbar() {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
+            <Link
+              href="/guest"
+              className="hidden sm:block border border-red-500 text-red-400 text-sm font-bold px-4 py-2 hover:bg-red-500 hover:text-white transition-colors"
+            >
+              FREE WEEK
+            </Link>
             <Link
               href="/login"
               className="hidden sm:flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors"
@@ -122,6 +138,13 @@ export function Navbar() {
             <hr className="border-white/10" />
             <Link href="/login" onClick={() => setOpen(false)} className="text-white/80 hover:text-white text-base font-medium">
               Member Login
+            </Link>
+            <Link
+              href="/guest"
+              onClick={() => setOpen(false)}
+              className="border border-red-500 text-red-400 text-base font-bold px-4 py-3 text-center hover:bg-red-500 hover:text-white transition-colors"
+            >
+              FREE WEEK TRIAL
             </Link>
             <Link
               href="/join"

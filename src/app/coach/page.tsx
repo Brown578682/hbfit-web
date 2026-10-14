@@ -5,6 +5,7 @@ import Link from 'next/link'
 import {
   Users, DollarSign, TrendingDown, UserPlus, GitBranch,
   Calendar, Clock, TrendingUp, AlertCircle, ChevronRight,
+  ScanLine, ShieldCheck, CreditCard, BarChart3,
 } from 'lucide-react'
 import { useView } from './view-context'
 import { useRouter } from 'next/navigation'
@@ -12,7 +13,7 @@ import { cn } from '@/lib/utils'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmt(d: Date) {
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' })
 }
 function fmtDate(d: Date) {
   return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
@@ -25,14 +26,22 @@ function currency(cents: number) {
 function ManagerDashboard() {
   const [stats, setStats] = useState<any>(null)
   const [sessions, setSessions] = useState<any[]>([])
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [forecast, setForecast] = useState<any>(null)
+  const [pendingCount, setPendingCount] = useState<number>(0)
+  const [checkInsToday, setCheckInsToday] = useState<number>(0)
   const today = new Date()
-
   useEffect(() => {
     fetch('/api/admin/stats').then(r => r.json()).then(setStats).catch(() => {})
+    fetch('/api/admin/forecast').then(r => r.json()).then(setForecast).catch(() => {})
     const start = new Date(); start.setHours(0,0,0,0)
     const end   = new Date(); end.setHours(23,59,59,999)
     fetch(`/api/coach/sessions?start=${start.toISOString()}&end=${end.toISOString()}`)
       .then(r => r.json()).then(d => setSessions(Array.isArray(d) ? d : [])).catch(() => {})
+    fetch('/api/me').then(r => r.json()).then(d => setIsAdmin(d?.user?.role === 'ADMIN')).catch(() => {})
+    fetch('/api/admin/gap').then(r => r.json()).then(d => {
+      if (Array.isArray(d)) setPendingCount(d.filter((g: any) => g.status === 'PENDING' || !g.gapVerifiedAt).length)
+    }).catch(() => {})
   }, [])
 
   const revenue = stats?.revenue ?? {}
@@ -141,6 +150,104 @@ function ManagerDashboard() {
         </div>
       </div>
 
+      {/* Admin quick-action cards */}
+      {isAdmin && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {[
+            { label: 'Check-in Kiosk',  href: '/admin/checkin', desc: 'Open member check-in', icon: ScanLine, color: 'text-red-400', bg: 'bg-red-400/10' },
+            { label: 'GAP Approvals',   href: '/admin/gap',     desc: pendingCount > 0 ? `${pendingCount} pending` : 'All clear', icon: ShieldCheck, color: 'text-amber-400', bg: 'bg-amber-400/10' },
+            { label: 'Billing',         href: '/admin/billing', desc: 'Subscriptions & payments', icon: CreditCard, color: 'text-green-400', bg: 'bg-green-400/10' },
+            { label: 'Reports',         href: '/admin/reports', desc: 'Analytics & exports', icon: BarChart3, color: 'text-blue-400', bg: 'bg-blue-400/10' },
+          ].map(({ label, href, desc, icon: Icon, color, bg }) => (
+            <Link key={href} href={href}
+              className="bg-zinc-900 border border-zinc-800 hover:border-zinc-600 p-5 transition-colors group">
+              <div className={cn('inline-flex p-2 mb-3', bg)}>
+                <Icon size={18} className={color} />
+              </div>
+              <div className="font-montserrat font-bold text-white text-sm group-hover:text-white">{label}</div>
+              <div className="text-zinc-500 text-xs mt-0.5">{desc}</div>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {/* ── Deposit Forecast Bar ── */}
+      {forecast?.days && (
+        <div className="bg-zinc-900 border border-zinc-800 p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-montserrat font-bold text-base uppercase tracking-wide">Deposit Forecast</h2>
+              <p className="text-zinc-500 text-xs mt-0.5">{forecast.monthName} · 28-day billing cycles · hover a day to see members</p>
+            </div>
+            <div className="text-right">
+              <div className="font-montserrat font-black text-xl text-white">{currency(forecast.totalForecast)}</div>
+              <div className="text-zinc-500 text-xs">month total</div>
+            </div>
+          </div>
+          {/* Bar */}
+          <div className="relative">
+            {/* Day columns */}
+            <div className="flex items-end gap-px h-16 w-full">
+              {forecast.days.map((d: any) => {
+                const maxAmount = Math.max(...forecast.days.map((x: any) => x.amount), 1)
+                const heightPct = d.amount > 0 ? Math.max(8, (d.amount / maxAmount) * 100) : 0
+                return (
+                  <div key={d.day} className="relative flex-1 flex flex-col items-center justify-end h-full group">
+                    {/* Tooltip */}
+                    {d.amount > 0 && (
+                      <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block z-10 pointer-events-none">
+                        <div className="bg-zinc-800 border border-zinc-700 text-white text-xs p-2 rounded whitespace-nowrap shadow-lg min-w-[120px]">
+                          <div className="font-montserrat font-bold mb-1">{forecast.monthName} {d.day} · {currency(d.amount)}</div>
+                          {d.members.slice(0, 6).map((name: string) => (
+                            <div key={name} className="text-zinc-400 leading-tight">{name}</div>
+                          ))}
+                          {d.members.length > 6 && <div className="text-zinc-500">+{d.members.length - 6} more</div>}
+                        </div>
+                      </div>
+                    )}
+                    {/* Bar segment */}
+                    <div
+                      className={cn(
+                        'w-full transition-opacity',
+                        d.amount === 0 ? 'opacity-0' :
+                        d.isPast   ? 'bg-green-700 opacity-60' :
+                        d.isToday  ? 'bg-green-400' :
+                                     'bg-green-600 opacity-80 hover:opacity-100'
+                      )}
+                      style={{ height: `${heightPct}%` }}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+            {/* Day number labels */}
+            <div className="flex gap-px mt-1">
+              {forecast.days.map((d: any) => (
+                <div key={d.day} className={cn(
+                  'flex-1 text-center font-montserrat text-[9px] leading-none pt-1',
+                  d.isToday  ? 'text-green-400 font-bold' :
+                  d.isPast   ? 'text-zinc-600' : 'text-zinc-500'
+                )}>
+                  {d.day}
+                </div>
+              ))}
+            </div>
+            {/* Today marker line */}
+            {forecast.today && (
+              <div
+                className="absolute top-0 bottom-0 w-px bg-green-400/60 pointer-events-none"
+                style={{ left: `calc(${((forecast.today - 0.5) / forecast.daysInMonth) * 100}%)` }}
+              />
+            )}
+          </div>
+          {/* Legend */}
+          <div className="flex items-center gap-5 mt-3 text-xs text-zinc-500">
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-green-700 opacity-60 inline-block rounded-sm" /> Collected</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-green-400 inline-block rounded-sm" /> Today</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-green-600 inline-block rounded-sm" /> Upcoming</span>
+          </div>
+        </div>
+      )}
       {/* Today's sessions + quick links side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Today's classes */}
@@ -181,7 +288,7 @@ function ManagerDashboard() {
               { label: 'View All Members',  href: '/coach/members',   desc: 'Search, filter, manage member profiles' },
               { label: 'Member Map',        href: '/coach/map',        desc: 'See where your community lives' },
               { label: 'Referral Tree',     href: '/coach/referrals', desc: 'Who brought who through the door' },
-              { label: 'Admin Panel',       href: '/admin',            desc: 'Billing, GAP approvals, check-ins' },
+              ...(isAdmin ? [{ label: 'Admin Panel', href: '/admin', desc: 'Billing, GAP approvals, check-ins' }] : []),
             ].map(({ label, href, desc }) => (
               <Link key={href} href={href}
                 className="flex items-center justify-between bg-zinc-900 border border-zinc-800 hover:border-zinc-600 px-4 py-3 transition-colors group">

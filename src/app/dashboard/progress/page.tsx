@@ -27,6 +27,8 @@ interface CoreMetricsRecord {
 
 export default function ProgressPage() {
   const [history, setHistory] = useState<CoreMetricsRecord[]>([]);
+  const [ageFromDob, setAgeFromDob] = useState<number | null>(null);
+  const [heightFromRecord, setHeightFromRecord] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [tab, setTab] = useState<"history" | "log">("history");
@@ -34,7 +36,16 @@ export default function ProgressPage() {
   useEffect(() => {
     fetch("/api/member/core-metrics")
       .then((r) => r.json())
-      .then((d: CoreMetricsRecord[]) => { if (Array.isArray(d)) setHistory(d); })
+      .then((d: { metrics?: CoreMetricsRecord[]; ageFromDob?: number | null; heightFromRecord?: number | null } | CoreMetricsRecord[]) => {
+        // Handle both old array shape and new { metrics, ageFromDob, heightFromRecord } shape
+        if (Array.isArray(d)) {
+          setHistory(d);
+        } else {
+          if (Array.isArray(d.metrics)) setHistory(d.metrics);
+          setAgeFromDob(d.ageFromDob ?? null);
+          setHeightFromRecord(d.heightFromRecord ?? null);
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -144,7 +155,7 @@ export default function ProgressPage() {
             {/* Assessment type picker */}
             <div>
               <label className="block text-xs text-zinc-500 uppercase tracking-widest font-montserrat mb-2">Assessment Type</label>
-              <AssessmentTypePicker />
+              <AssessmentTypePicker ageFromDob={ageFromDob} heightFromRecord={heightFromRecord} />
             </div>
           </div>
         )}
@@ -155,7 +166,7 @@ export default function ProgressPage() {
 }
 
 // ── Assessment type picker + form ─────────────────────────────────────────────
-function AssessmentTypePicker() {
+function AssessmentTypePicker({ ageFromDob, heightFromRecord }: { ageFromDob: number | null; heightFromRecord: number | null }) {
   const [type, setType] = useState<AssessmentType>("ONGOING");
 
   return (
@@ -174,6 +185,14 @@ function AssessmentTypePicker() {
       <CoreMetricsEntry
         assessmentType={type}
         allowSkip={true}
+        initial={{
+          ...(ageFromDob != null ? { age: String(ageFromDob) } : {}),
+          ...(heightFromRecord != null && (ageFromDob == null || ageFromDob >= 21)
+            ? { heightIn: String(heightFromRecord) }
+            : {}),
+        }}
+        ageFromDob={ageFromDob}
+        heightFromRecord={heightFromRecord != null && (ageFromDob == null || ageFromDob >= 21) ? heightFromRecord : null}
         onSaved={() => { window.location.reload(); }}
       />
     </div>

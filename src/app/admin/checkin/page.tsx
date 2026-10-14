@@ -1,24 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CheckCircle2, XCircle, Delete, RotateCcw } from "lucide-react";
-
-// ── Mock member database (keyed by 4-digit code) ──────────────────────────────
-
-const MEMBER_DB: Record<string, { name: string; plan: string }> = {
-  "1001": { name: "Randy Franklin",  plan: "Base Membership" },
-  "1002": { name: "Cookie Ainsworth", plan: "GAP Program" },
-  "1003": { name: "Richard Lim",     plan: "GAP Program" },
-  "1004": { name: "Brandi Long",     plan: "Small Group Training" },
-  "1005": { name: "Tamara Okafor",   plan: "Base Membership" },
-  "1006": { name: "DeShawn Morris",  plan: "10-Class Pack" },
-  "1007": { name: "Heather Valdez",  plan: "Small Group Training" },
-  "1008": { name: "Marcus Webb",     plan: "GAP Program" },
-  "1009": { name: "Jasmine Torres",  plan: "Base Membership" },
-  "1010": { name: "Tyler Reeves",    plan: "Personal Training" },
-};
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface CheckinRecord {
   name: string;
@@ -29,61 +12,74 @@ interface CheckinRecord {
 
 type CheckinResult =
   | { ok: true; name: string; plan: string }
-  | { ok: false }
+  | { ok: false; error: string }
   | null;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function nowTime() {
   return new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-function lookupCode(code: string): CheckinResult {
-  const member = MEMBER_DB[code];
-  if (member) return { ok: true, ...member };
-  return { ok: false };
-}
-
-// ── Component ─────────────────────────────────────────────────────────────────
-
 const KEYPAD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "CLR", "0", "GO"];
 
 export default function CheckinPage() {
-  const [code, setCode]           = useState("");
-  const [result, setResult]       = useState<CheckinResult>(null);
-  const [history, setHistory]     = useState<CheckinRecord[]>([]);
+  const [code, setCode]       = useState("");
+  const [result, setResult]   = useState<CheckinResult>(null);
+  const [history, setHistory] = useState<CheckinRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Load today's check-ins from DB on mount
+  useEffect(() => {
+    fetch("/api/checkin")
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data.checkIns)) {
+          setHistory(data.checkIns.map((c: { name: string; time: string }) => ({
+            name: c.name,
+            plan: "",
+            time: new Date(c.time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+            code: "",
+          })));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   function handleKey(key: string) {
-    if (key === "CLR") {
-      setCode("");
-      setResult(null);
-      return;
-    }
-    if (key === "GO") {
-      submit(code);
-      return;
-    }
-    if (code.length < 4) {
-      setCode((c) => c + key);
-    }
+    if (key === "CLR") { setCode(""); setResult(null); return; }
+    if (key === "GO")  { submit(code); return; }
+    if (code.length < 4) setCode(c => c + key);
   }
 
-  function submit(c: string) {
+  async function submit(c: string) {
     const trimmed = c.trim();
-    if (trimmed.length === 0) return;
-    const res = lookupCode(trimmed);
-    setResult(res);
-    if (res && res.ok) {
-      setHistory((prev) => [
-        { name: res.name, plan: res.plan, time: nowTime(), code: trimmed },
-        ...prev.slice(0, 9),
-      ]);
+    if (!trimmed) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: trimmed }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const entry: CheckinRecord = {
+          name: `${data.member.firstName} ${data.member.lastName}`,
+          plan: data.member.membership,
+          time: nowTime(),
+          code: trimmed,
+        };
+        setResult({ ok: true, name: entry.name, plan: entry.plan });
+        setHistory(prev => [entry, ...prev.slice(0, 19)]);
+      } else {
+        setResult({ ok: false, error: data.error ?? "Code not recognised." });
+      }
+    } catch {
+      setResult({ ok: false, error: "Connection error. Try again." });
+    } finally {
+      setLoading(false);
+      setTimeout(() => { setCode(""); setResult(null); }, 3500);
     }
-    // Auto-clear after 3 s
-    setTimeout(() => {
-      setCode("");
-      setResult(null);
-    }, 3000);
   }
 
   function handleTextSubmit(e: React.FormEvent) {
@@ -98,9 +94,7 @@ export default function CheckinPage() {
         <h1 className="font-montserrat font-black text-4xl uppercase tracking-widest text-white">
           Check-In
         </h1>
-        <p className="font-lora text-zinc-500 mt-1 text-lg">
-          Enter your 4-digit member code
-        </p>
+        <p className="text-zinc-500 mt-1 text-lg">Enter your 4-digit member code</p>
       </div>
 
       {/* Code Display */}
@@ -133,15 +127,13 @@ export default function CheckinPage() {
               <CheckCircle2 className="text-green-400 mx-auto mb-3" size={48} />
               <p className="font-montserrat font-black text-2xl text-green-400">Welcome!</p>
               <p className="font-montserrat font-bold text-xl text-white mt-1">{result.name}</p>
-              <p className="font-lora text-zinc-400 mt-1">{result.plan}</p>
+              <p className="text-zinc-400 mt-1">{result.plan}</p>
             </>
           ) : (
             <>
               <XCircle className="text-red-400 mx-auto mb-3" size={48} />
               <p className="font-montserrat font-black text-2xl text-red-400">Not Found</p>
-              <p className="font-lora text-zinc-400 mt-1">
-                Code not recognised. Please try again or see the front desk.
-              </p>
+              <p className="text-zinc-400 mt-1">{result.error}</p>
             </>
           )}
         </div>
@@ -156,7 +148,8 @@ export default function CheckinPage() {
             <button
               key={key}
               onClick={() => handleKey(key)}
-              className={`h-18 py-5 rounded-2xl font-montserrat font-black text-2xl flex items-center justify-center transition-all active:scale-95 select-none ${
+              disabled={loading}
+              className={`py-5 rounded-2xl font-montserrat font-black text-2xl flex items-center justify-center transition-all active:scale-95 select-none disabled:opacity-50 ${
                 isGo
                   ? "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/40"
                   : isClr
@@ -187,7 +180,8 @@ export default function CheckinPage() {
         />
         <button
           type="submit"
-          className="px-5 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-montserrat font-bold transition-colors flex items-center gap-1.5"
+          disabled={loading}
+          className="px-5 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-montserrat font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"
         >
           <RotateCcw size={16} />
           Go
@@ -200,7 +194,7 @@ export default function CheckinPage() {
           Today&apos;s Check-ins ({history.length})
         </h2>
         {history.length === 0 ? (
-          <p className="text-center font-lora text-zinc-600 py-6">No check-ins yet today.</p>
+          <p className="text-center text-zinc-600 py-6">No check-ins yet today.</p>
         ) : (
           <div className="space-y-2">
             {history.map((h, i) => (
@@ -210,7 +204,7 @@ export default function CheckinPage() {
               >
                 <div>
                   <p className="font-montserrat font-bold text-sm text-white">{h.name}</p>
-                  <p className="font-lora text-xs text-zinc-500">{h.plan}</p>
+                  {h.plan && <p className="text-xs text-zinc-500">{h.plan}</p>}
                 </div>
                 <span className="font-montserrat text-sm text-zinc-400">{h.time}</span>
               </div>

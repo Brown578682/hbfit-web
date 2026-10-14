@@ -14,7 +14,7 @@ const GAP_DOC_REQUIREMENTS = [
   "Any official documentation showing qualifying status",
 ];
 
-type StudentEntry = { firstName: string; lastName: string; dob: string };
+type StudentEntry = { firstName: string; lastName: string; dob: string; email: string };
 
 type FormData = {
   planSlug: string;
@@ -60,7 +60,7 @@ function JoinForm({ defaultPlan }: { defaultPlan: string }) {
     agreeTerms: false,
     agreeHealth: false,
     agreePhoto: false,
-    students: [{ firstName: "", lastName: "", dob: "" }],
+    students: [{ firstName: "", lastName: "", dob: "", email: "" }],
     isParentGuardian: false,
     emergencyContactName: "",
     emergencyContactPhone: "",
@@ -87,8 +87,7 @@ function JoinForm({ defaultPlan }: { defaultPlan: string }) {
   };
 
   const addStudent = () => {
-    if (form.students.length >= 3) return;
-    update("students", [...form.students, { firstName: "", lastName: "", dob: "" }]);
+    update("students", [...form.students, { firstName: "", lastName: "", dob: "", email: "" }]);
   };
 
   const updateStudent = (i: number, field: keyof StudentEntry, value: string) => {
@@ -110,13 +109,32 @@ function JoinForm({ defaultPlan }: { defaultPlan: string }) {
     200_00
   );
 
+  const today = new Date();
+  const maxDob = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate())
+    .toISOString().slice(0, 10);
+
   const canAdvance = () => {
     if (step === 0) return !!form.planSlug;
     if (step === 1) {
       const baseOk = !!(form.firstName && form.lastName && form.email && form.phone);
       if (!baseOk) return false;
+      if (hasHouseholdEmailErrors) return false;
+      // Primary account holder must be 18+
+      if (form.dob) {
+        const age = (Date.now() - new Date(form.dob).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+        if (age < 18) return false;
+      }
       if (isHomeschool) {
-        const studentsOk = form.students.every(s => s.firstName && s.lastName && s.dob);
+        const parentEmail = form.email.toLowerCase().trim();
+        const studentEmails = form.students.map(s => s.email.toLowerCase().trim());
+        // All students must have firstName, lastName, dob, and a valid distinct email
+        const studentsOk = form.students.every((s, i) => {
+          if (!s.firstName || !s.lastName || !s.dob || !s.email) return false;
+          const em = s.email.toLowerCase().trim();
+          if (em === parentEmail) return false;           // can't match parent
+          if (studentEmails.indexOf(em) !== i) return false; // can't duplicate each other
+          return true;
+        });
         const emergencyOk = !!(form.emergencyContactName && form.emergencyContactPhone && form.emergencyContactRelationship);
         return studentsOk && form.isParentGuardian && emergencyOk;
       }
@@ -127,11 +145,46 @@ function JoinForm({ defaultPlan }: { defaultPlan: string }) {
     return false;
   };
 
+  // Per-student email error helper (called during render)
+  const studentEmailError = (i: number): string | null => {
+    const s = form.students[i];
+    if (!s.email) return null; // let required validation handle blank
+    const em = s.email.toLowerCase().trim();
+    if (em === form.email.toLowerCase().trim()) return "Must be different from your (parent) email";
+    const dupe = form.students.findIndex((o, j) => j !== i && o.email.toLowerCase().trim() === em);
+    if (dupe !== -1) return `Same as Student ${dupe + 1}'s email`;
+    return null;
+  };
+
+  // Per-household-member email error helper
+  const householdEmailError = (i: number): string | null => {
+    const m = form.householdMembers[i];
+    if (!m.email) return null; // email is optional for household members — only validate if entered
+    const em = m.email.toLowerCase().trim();
+    if (em === form.email.toLowerCase().trim()) return "Must be different from your email";
+    // Check against other household members
+    const dupe = form.householdMembers.findIndex((o, j) => j !== i && o.email.toLowerCase().trim() === em);
+    if (dupe !== -1) return `Same as Family Member ${dupe + 1}'s email`;
+    // Check against students (HH plan)
+    if (isHomeschool) {
+      const sdupe = form.students.findIndex(s => s.email.toLowerCase().trim() === em);
+      if (sdupe !== -1) return `Same as Student ${sdupe + 1}'s email`;
+    }
+    return null;
+  };
+
+  const hasHouseholdEmailErrors = form.householdMembers.some((_, i) => !!householdEmailError(i));
+
   const advance = () => {
     if (!canAdvance()) return;
     if (step === 0) trackEvent("select_plan", { plan_name: selectedPlan?.name ?? form.planSlug });
     if (step === 1) trackEvent("join_info_complete");
     if (step === 2) trackEvent("join_verification_complete", { is_gap: isGap ? 1 : 0 });
+    // Skip step 2 (GAP verification) entirely for non-GAP members
+    if (step === 1 && !isGap) {
+      setStep(3);
+      return;
+    }
     setStep(s => s + 1);
   };
 
@@ -218,7 +271,7 @@ function JoinForm({ defaultPlan }: { defaultPlan: string }) {
             </h1>
             <p className="text-white/50 text-sm mb-8">All plans are 4-week billing cycles. No contracts.</p>
             <div className="space-y-3">
-              {MEMBERSHIP_PLANS.map((plan) => {
+              {MEMBERSHIP_PLANS.filter(p => !p.joinHidden).map((plan) => {
                 const selected = form.planSlug === plan.slug;
                 return (
                   <label
@@ -297,7 +350,11 @@ function JoinForm({ defaultPlan }: { defaultPlan: string }) {
               <div>
                 <label className="text-white/60 text-xs uppercase tracking-wider block mb-1.5">Date of Birth</label>
                 <input type="date" value={form.dob} onChange={e => update("dob", e.target.value)}
+                  max={maxDob}
                   className="w-full bg-zinc-900 border border-white/20 text-white px-4 py-3 focus:outline-none focus:border-white/50 text-sm" />
+                {form.dob && (Date.now() - new Date(form.dob).getTime()) / (1000 * 60 * 60 * 24 * 365.25) < 18 && (
+                  <p className="text-red-400 text-xs mt-1.5">Primary account holder must be 18 or older.</p>
+                )}
               </div>
               <div>
                 <label className="text-white/60 text-xs uppercase tracking-wider block mb-1.5">Address</label>
@@ -359,9 +416,21 @@ function JoinForm({ defaultPlan }: { defaultPlan: string }) {
                         className="bg-zinc-900 border border-white/10 text-white px-3 py-2 text-sm focus:outline-none focus:border-white/40" />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <input type="email" placeholder="Email" value={m.email}
-                        onChange={e => { const hm = [...form.householdMembers]; hm[i].email = e.target.value; update("householdMembers", hm); }}
-                        className="bg-zinc-900 border border-white/10 text-white px-3 py-2 text-sm focus:outline-none focus:border-white/40" />
+                      <div className="space-y-1">
+                        <input type="email" placeholder="Email" value={m.email}
+                          onChange={e => { const hm = [...form.householdMembers]; hm[i].email = e.target.value; update("householdMembers", hm); }}
+                          className={cn(
+                            "w-full bg-zinc-900 border text-white px-3 py-2 text-sm focus:outline-none",
+                            householdEmailError(i)
+                              ? "border-red-500 focus:border-red-400"
+                              : "border-white/10 focus:border-white/40"
+                          )} />
+                        {householdEmailError(i) && (
+                          <p className="text-red-400 text-xs flex items-center gap-1">
+                            <AlertCircle size={11} /> {householdEmailError(i)}
+                          </p>
+                        )}
+                      </div>
                       <input type="tel" placeholder="Phone" value={m.phone}
                         onChange={e => { const hm = [...form.householdMembers]; hm[i].phone = e.target.value; update("householdMembers", hm); }}
                         className="bg-zinc-900 border border-white/10 text-white px-3 py-2 text-sm focus:outline-none focus:border-white/40" />
@@ -423,15 +492,31 @@ function JoinForm({ defaultPlan }: { defaultPlan: string }) {
                           onChange={e => updateStudent(i, "dob", e.target.value)}
                           className="w-full bg-zinc-900 border border-white/20 text-white px-3 py-2 text-sm focus:outline-none focus:border-white/50" />
                       </div>
+                      <div>
+                        <label className="text-white/60 text-xs uppercase tracking-wider block mb-1.5">
+                          Student Email * <span className="text-white/30 normal-case tracking-normal font-normal">(used for portal login)</span>
+                        </label>
+                        <input type="email" value={student.email}
+                          onChange={e => updateStudent(i, "email", e.target.value)}
+                          placeholder="student@example.com"
+                          className={cn(
+                            "w-full bg-zinc-900 border text-white px-3 py-2 text-sm focus:outline-none placeholder-white/20",
+                            studentEmailError(i)
+                              ? "border-red-500 focus:border-red-400"
+                              : "border-white/20 focus:border-white/50"
+                          )} />
+                        {studentEmailError(i) && (
+                          <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                            <AlertCircle size={11} /> {studentEmailError(i)}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   ))}
-                  {form.students.length < 3 && (
-                    <button type="button" onClick={addStudent}
-                      className="flex items-center gap-2 text-xs border border-white/20 text-white/60 hover:text-white hover:border-white/40 px-4 py-2 transition-colors">
-                      <PlusCircle size={13} /> Add Another Student
-                      <span className="text-white/30">({form.students.length}/3)</span>
-                    </button>
-                  )}
+                  <button type="button" onClick={addStudent}
+                    className="flex items-center gap-2 text-xs border border-white/20 text-white/60 hover:text-white hover:border-white/40 px-4 py-2 transition-colors">
+                    <PlusCircle size={13} /> Add Another Student
+                  </button>
 
                   {/* Parent/Guardian confirmation */}
                   <label className="flex items-start gap-3 cursor-pointer group mt-2">
@@ -517,8 +602,7 @@ function JoinForm({ defaultPlan }: { defaultPlan: string }) {
             )}
 
             {/* Stand in the GAP */}
-            {!isGap && (
-              <div className="mt-6 border border-white/10 bg-zinc-950">
+            <div className="mt-6 border border-white/10 bg-zinc-950">
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-white/10">
                   <div className="text-white/40 text-xs uppercase tracking-widest mb-1">Optional · $25/4-week cycle</div>
@@ -560,7 +644,6 @@ function JoinForm({ defaultPlan }: { defaultPlan: string }) {
                   </label>
                 </div>
               </div>
-            )}
           </div>
         )}
 
@@ -752,7 +835,7 @@ function JoinForm({ defaultPlan }: { defaultPlan: string }) {
         {/* ── Navigation ── */}
         <div className="flex items-center justify-between mt-10">
           {step > 0 ? (
-            <button type="button" onClick={() => setStep(s => s - 1)}
+            <button type="button" onClick={() => setStep(s => (s === 3 && !isGap) ? 1 : s - 1)}
               className="text-white/50 hover:text-white text-sm uppercase tracking-wide transition-colors">
               ← Back
             </button>

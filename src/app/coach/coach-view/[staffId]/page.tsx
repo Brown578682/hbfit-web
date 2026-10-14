@@ -21,7 +21,7 @@ interface Session {
 }
 
 const fmt = (d: Date) =>
-  d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' })
 
 export default function CoachViewPage() {
   const { staffId } = useParams<{ staffId: string }>()
@@ -30,9 +30,12 @@ export default function CoachViewPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Pass explicit today window so we get all sessions from midnight → end of day
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayEnd   = new Date(); todayEnd.setHours(23, 59, 59, 999);
     Promise.all([
       fetch('/api/coach/staff').then(r => r.json()),
-      fetch(`/api/coach/sessions?staffId=${staffId}`).then(r => r.json()),
+      fetch(`/api/coach/sessions?staffId=${staffId}&start=${todayStart.toISOString()}&end=${todayEnd.toISOString()}`).then(r => r.json()),
     ]).then(([staffList, sessData]) => {
       const found = Array.isArray(staffList) ? staffList.find((s: StaffInfo) => s.id === staffId) : null
       setCoach(found ?? null)

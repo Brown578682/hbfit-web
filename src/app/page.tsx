@@ -58,6 +58,9 @@ export default function HomePage() {
             <Link href="/join" className="bg-white text-black font-bold text-sm uppercase tracking-widest px-8 py-4 hover:bg-white/90 transition-colors">
               Start Your Mission
             </Link>
+            <Link href="/guest" className="border border-red-500 text-red-400 font-bold text-sm uppercase tracking-widest px-8 py-4 hover:bg-red-500 hover:text-white transition-colors">
+              Try a Free Week
+            </Link>
             <Link href="/schedule" className="border border-white/40 text-white font-bold text-sm uppercase tracking-widest px-8 py-4 hover:border-white hover:bg-white/5 transition-colors">
               View Schedule
             </Link>

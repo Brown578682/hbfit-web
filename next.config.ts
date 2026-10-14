@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
         hostname: "honorboundfit.com",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "hbfit-uploads.s3.us-east-1.amazonaws.com",
+        pathname: "/member-photos/**",
+      },
     ],
   },
 };

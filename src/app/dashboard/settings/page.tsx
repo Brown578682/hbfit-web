@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Bell,
@@ -11,8 +11,18 @@ import {
   KeyRound,
   User,
   UserCheck,
+  Download,
+  Smartphone,
+  CreditCard,
+  ExternalLink,
+  Loader2,
+  AlertCircle,
+  Camera,
+  Trash2,
 } from "lucide-react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { usePWAInstall } from "@/hooks/usePWAInstall";
+import { MemberAvatar } from "@/components/MemberAvatar";
 
 interface Coach {
   id: string;
@@ -23,8 +33,107 @@ interface Coach {
   photoUrl: string | null;
 }
 
+// Small component to handle ?plan_success=1 redirect — must be in Suspense
+function PlanSuccessHandler({ onSuccess }: { onSuccess: () => void }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("plan_success") === "1") onSuccess();
+  }, [searchParams, onSuccess]);
+  return null;
+}
+
 export default function SettingsPage() {
-  const { data: session } = useSession();
+
+  // ── Me state (replaces useSession) ────────────────────────────────────────
+  const [me, setMe] = useState<{ name?: string; email?: string } | null>(null);
+  useEffect(() => {
+    fetch("/api/me").then(r => r.json()).then(d => setMe(d?.user ?? null)).catch(() => {});
+  }, []);
+
+  // Show success toast if redirected back from plan checkout
+  const handlePlanSuccess = useCallback(() => {
+    fetch("/api/member/membership").then(r => r.json()).then(d => setMembership(d ?? null)).catch(() => {});
+  }, []);
+
+  // ── Profile photo state ────────────────────────────────────────────────────
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoMsg, setPhotoMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/member/photo").then(r => r.json()).then(d => setPhotoUrl(d?.photoUrl ?? null)).catch(() => {});
+  }, []);
+
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setPhotoMsg({ ok: false, text: "File too large. Max 10 MB." }); return; }
+    setPhotoUploading(true); setPhotoMsg(null);
+    try {
+      // 1. Get presigned URL
+      const res = await fetch("/api/member/photo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contentType: file.type }),
+      });
+      const { uploadUrl, photoUrl: newUrl } = await res.json();
+      if (!uploadUrl) throw new Error("Could not get upload URL");
+      // 2. Upload directly to S3
+      await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+      // 3. Confirm with API
+      await fetch("/api/member/photo", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoUrl: newUrl }),
+      });
+      setPhotoUrl(newUrl + "?t=" + Date.now()); // bust cache
+      setPhotoMsg({ ok: true, text: "Photo updated!" });
+    } catch {
+      setPhotoMsg({ ok: false, text: "Upload failed. Please try again." });
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
+
+  async function handlePhotoDelete() {
+    if (!confirm("Remove your profile photo?")) return;
+    setPhotoUploading(true);
+    await fetch("/api/member/photo", { method: "DELETE" });
+    setPhotoUrl(null);
+    setPhotoMsg({ ok: true, text: "Photo removed." });
+    setPhotoUploading(false);
+  }
+
+  // ── Membership state ───────────────────────────────────────────────────────
+  const [membership, setMembership] = useState<{
+    plan: string; status: string; currentPeriodEnd?: string; cancelAtPeriodEnd?: boolean;
+  } | null>(null);
+  const [membershipLoading, setMembershipLoading] = useState(true);
+  const [portalLoading, setPortalLoading] = useState<string | null>(null);
+  const [portalError, setPortalError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/member/membership")
+      .then(r => r.json())
+      .then(d => { setMembership(d ?? null); setMembershipLoading(false); })
+      .catch(() => setMembershipLoading(false));
+  }, []);
+
+  const openPortal = async (flow?: string) => {
+    setPortalLoading(flow ?? "manage"); setPortalError("");
+    try {
+      const res = await fetch("/api/member/billing-portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ flow: flow ?? null }),
+      });
+      const data = await res.json();
+      if (data.url) { window.location.href = data.url; }
+      else { setPortalError(data.error ?? "Unable to open billing portal."); setPortalLoading(null); }
+    } catch {
+      setPortalError("Network error — please try again."); setPortalLoading(null);
+    }
+  };
 
   // ── PIN state ──────────────────────────────────────────────────────────────
   const [memberCode, setMemberCode] = useState<string | null>(null);
@@ -46,6 +155,9 @@ export default function SettingsPage() {
   // ── Push notifications ─────────────────────────────────────────────────────
   const { permission, subscribed, loading: pushLoading, subscribe, unsubscribe } =
     usePushNotifications();
+  const { canInstall, installed, install } = usePWAInstall();
+  const [pwaInstalling, setPwaInstalling] = useState(false);
+  const [pwaMsg, setPwaMsg] = useState<string | null>(null);
 
   // ── Load PIN info ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -136,11 +248,14 @@ export default function SettingsPage() {
     }
   }, [selectedCoachId]);
 
-  const name = session?.user?.name ?? "";
-  const email = session?.user?.email ?? "";
+  const name  = me?.name  ?? "";
+  const email = me?.email ?? "";
 
   return (
     <div className="min-h-screen bg-black text-white">
+      <Suspense fallback={null}>
+        <PlanSuccessHandler onSuccess={handlePlanSuccess} />
+      </Suspense>
       {/* Header */}
       <header className="border-b border-zinc-800 bg-zinc-950 px-6 py-4 flex items-center gap-4">
         <Link
@@ -159,6 +274,107 @@ export default function SettingsPage() {
         <h1 className="font-montserrat text-3xl font-extrabold uppercase tracking-tight">
           Account Settings
         </h1>
+
+        {/* ── Profile Photo ──────────────────────────────────────────────── */}
+        <section className="rounded-xl bg-zinc-900 border border-zinc-700 p-6 space-y-5">
+          <h2 className="font-montserrat text-lg font-bold uppercase tracking-widest flex items-center gap-2">
+            <User size={18} className="text-red-500" /> Profile Photo
+          </h2>
+          <div className="flex items-center gap-6">
+            <MemberAvatar photoUrl={photoUrl} name={me?.name} size={80} />
+            <div className="space-y-3">
+              <label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 border font-montserrat font-bold text-xs uppercase tracking-widest transition-colors ${photoUploading ? 'border-zinc-700 text-zinc-600 cursor-not-allowed' : 'border-zinc-600 text-zinc-300 hover:border-white hover:text-white'}`}>
+                {photoUploading ? <Loader2 size={13} className="animate-spin" /> : <Camera size={13} />}
+                {photoUploading ? "Uploading…" : photoUrl ? "Change Photo" : "Upload Photo"}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  onChange={handlePhotoChange}
+                  disabled={photoUploading}
+                />
+              </label>
+              {photoUrl && (
+                <button
+                  onClick={handlePhotoDelete}
+                  disabled={photoUploading}
+                  className="flex items-center gap-1.5 text-xs text-zinc-600 hover:text-red-400 transition-colors font-montserrat"
+                >
+                  <Trash2 size={12} /> Remove photo
+                </button>
+              )}
+              <p className="text-zinc-600 text-xs">JPG, PNG, or WebP · Max 10 MB</p>
+            </div>
+          </div>
+          {photoMsg && (
+            <p className={`text-sm font-montserrat font-bold ${photoMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+              {photoMsg.ok ? '✓ ' : '✗ '}{photoMsg.text}
+            </p>
+          )}
+        </section>
+
+        {/* ── Membership ────────────────────────────────────────────────── */}
+        <section className="rounded-xl bg-zinc-900 border border-zinc-700 p-6 space-y-5">
+          <h2 className="font-montserrat text-lg font-bold uppercase tracking-widest flex items-center gap-2">
+            <CreditCard size={18} className="text-red-500" /> Membership
+          </h2>
+
+          {membershipLoading ? (
+            <div className="flex items-center gap-2 text-zinc-500 text-sm">
+              <Loader2 size={14} className="animate-spin" /> Loading…
+            </div>
+          ) : membership ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-montserrat font-bold">{membership.plan}</p>
+                  <p className="text-zinc-500 text-xs mt-0.5">
+                    {membership.cancelAtPeriodEnd
+                      ? <span className="text-amber-400">Cancels {membership.currentPeriodEnd ? new Date(membership.currentPeriodEnd).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "at end of period"}</span>
+                      : membership.currentPeriodEnd
+                        ? `Renews ${new Date(membership.currentPeriodEnd).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`
+                        : "Active"
+                    }
+                  </p>
+                </div>
+                <span className={`text-xs font-montserrat font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
+                  membership.status === "ACTIVE"   ? "bg-green-950 text-green-400 border border-green-800" :
+                  membership.status === "PAST_DUE" ? "bg-amber-950 text-amber-400 border border-amber-800" :
+                  membership.status === "CANCELED" ? "bg-red-950 text-red-400 border border-red-800" :
+                  "bg-zinc-800 text-zinc-400"
+                }`}>
+                  {membership.cancelAtPeriodEnd ? "Canceling" : membership.status.replace("_", " ")}
+                </span>
+              </div>
+
+              {portalError && (
+                <div className="flex items-center gap-2 text-red-400 text-xs font-montserrat">
+                  <AlertCircle size={12} /> {portalError}
+                </div>
+              )}
+
+              <button onClick={() => openPortal("payment_method")} disabled={!!portalLoading}
+                className="flex items-center gap-2 border border-zinc-600 text-zinc-300 hover:text-white hover:border-zinc-400 font-montserrat font-bold text-xs uppercase tracking-widest px-5 py-2.5 rounded-lg transition-colors disabled:opacity-50">
+                {portalLoading === "payment_method" ? <><Loader2 size={13} className="animate-spin" /> Opening…</> : <><CreditCard size={13} /> Update Payment Method</>}
+              </button>
+              <Link href="/dashboard/membership"
+                className="flex items-center gap-2 border border-zinc-600 text-zinc-300 hover:text-white hover:border-zinc-400 font-montserrat font-bold text-xs uppercase tracking-widest px-5 py-2.5 rounded-lg transition-colors">
+                <ExternalLink size={13} /> Manage Membership
+              </Link>
+              <p className="text-zinc-600 text-xs">
+                Change plan, add family members, or cancel — no Stripe required.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-zinc-400 text-sm">No active membership found.</p>
+              <Link href="/dashboard/select-plan"
+                className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white font-montserrat font-bold text-xs uppercase tracking-widest px-5 py-2.5 rounded-lg transition-colors">
+                View Plans →
+              </Link>
+            </div>
+          )}
+        </section>
 
         {/* ── Kiosk Access ──────────────────────────────────────────────── */}
         <section className="rounded-xl bg-zinc-900 border border-zinc-700 p-6 space-y-6">
@@ -414,6 +630,67 @@ export default function SettingsPage() {
           >
             {coachSaving ? "Saving…" : "Save Preference"}
           </button>
+        </section>
+
+        {/* ── Install App ────────────────────────────────────────────────── */}
+        <section className="rounded-xl bg-zinc-900 border border-zinc-700 p-6 space-y-4">
+          <h2 className="font-montserrat text-lg font-bold uppercase tracking-widest flex items-center gap-2">
+            <Smartphone size={18} className="text-red-500" /> Install App
+          </h2>
+
+          {installed ? (
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-emerald-400" />
+              <p className="text-emerald-400 text-sm font-montserrat font-bold">
+                App installed — you&apos;re running from your home screen.
+              </p>
+            </div>
+          ) : canInstall ? (
+            <div className="space-y-3">
+              <p className="text-zinc-400 text-sm font-lora">
+                Install the Honor Bound FIT app for quick access directly from your home screen — no browser needed.
+              </p>
+              {pwaMsg && (
+                <p className="text-sm font-montserrat text-zinc-400">{pwaMsg}</p>
+              )}
+              <button
+                onClick={async () => {
+                  setPwaInstalling(true);
+                  setPwaMsg(null);
+                  const outcome = await install();
+                  setPwaInstalling(false);
+                  if (outcome === "dismissed") setPwaMsg("You can install anytime from this page.");
+                }}
+                disabled={pwaInstalling}
+                className="flex items-center gap-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 transition-colors text-white font-montserrat font-bold uppercase tracking-wider px-6 py-2.5 rounded-lg text-sm"
+              >
+                <Download size={15} />
+                {pwaInstalling ? "Opening…" : "Add to Home Screen"}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-zinc-400 text-sm font-lora">
+                Add this app to your home screen for quick access without the browser address bar.
+              </p>
+              <div className="bg-zinc-800 border border-zinc-700 rounded-lg p-4 space-y-2">
+                <p className="font-montserrat text-xs font-bold uppercase tracking-widest text-zinc-400">On iPhone / iPad (Safari)</p>
+                <ol className="font-lora text-sm text-zinc-300 space-y-1 list-decimal list-inside">
+                  <li>Tap the <span className="font-bold">Share</span> button (box with arrow) in Safari</li>
+                  <li>Scroll down and tap <span className="font-bold">Add to Home Screen</span></li>
+                  <li>Tap <span className="font-bold">Add</span> in the top right</li>
+                </ol>
+              </div>
+              <div className="bg-zinc-800 border border-zinc-700 rounded-lg p-4 space-y-2">
+                <p className="font-montserrat text-xs font-bold uppercase tracking-widest text-zinc-400">On Android (Chrome)</p>
+                <ol className="font-lora text-sm text-zinc-300 space-y-1 list-decimal list-inside">
+                  <li>Tap the <span className="font-bold">⋮</span> menu in Chrome</li>
+                  <li>Tap <span className="font-bold">Add to Home screen</span></li>
+                  <li>Tap <span className="font-bold">Add</span></li>
+                </ol>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* ── Notification Preferences ───────────────────────────────────── */}

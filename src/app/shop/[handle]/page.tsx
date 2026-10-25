@@ -10,8 +10,9 @@ export async function generateStaticParams() {
   return products.map((p) => ({ handle: p.handle }));
 }
 
-export async function generateMetadata({ params }: { params: { handle: string } }) {
-  const product = await getProductByHandle(params.handle);
+export async function generateMetadata({ params }: { params: Promise<{ handle: string }> }) {
+  const { handle } = await params;
+  const product = await getProductByHandle(handle);
   if (!product) return { title: "Product Not Found — Honor Bound FIT" };
   return {
     title: `${product.title} — Honor Bound FIT`,
@@ -19,8 +20,9 @@ export async function generateMetadata({ params }: { params: { handle: string } 
   };
 }
 
-export default async function ProductPage({ params }: { params: { handle: string } }) {
-  const product = await getProductByHandle(params.handle);
+export default async function ProductPage({ params }: { params: Promise<{ handle: string }> }) {
+  const { handle } = await params;
+  const product = await getProductByHandle(handle);
   if (!product) notFound();
 
   const images = product.images.nodes.length > 0 ? product.images.nodes : (product.featuredImage ? [product.featuredImage] : []);

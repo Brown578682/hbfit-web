@@ -16,6 +16,7 @@ const isHeroTreeSeason = month === 11 || month === 0;
 const NAV_LINKS = [
   { href: "/about", label: "About" },
   { href: "/schedule", label: "Schedule" },
+  { href: "/shop", label: "Shop" },
   { href: "/membership", label: "Membership" },
   { href: "/f3", label: "F3" },
   { href: "/corporate-wellness", label: "Corporate Wellness" },

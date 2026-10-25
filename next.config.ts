@@ -18,6 +18,11 @@ const nextConfig: NextConfig = {
         hostname: "hbfit-uploads.s3.us-east-1.amazonaws.com",
         pathname: "/member-photos/**",
       },
+      {
+        protocol: "https",
+        hostname: "cdn.shopify.com",
+        pathname: "/**",
+      },
     ],
   },
 };

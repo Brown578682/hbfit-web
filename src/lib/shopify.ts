@@ -96,7 +96,7 @@ const PRODUCT_FIELDS = `
     minVariantPrice { amount currencyCode }
     maxVariantPrice { amount currencyCode }
   }
-  variants(first: 20) {
+  variants(first: 100) {
     nodes {
       id
       title
@@ -107,6 +107,43 @@ const PRODUCT_FIELDS = `
     }
   }
 `;
+
+// ── Category mapping ───────────────────────────────────────────────────────────
+
+export const CATEGORY_MAP: Record<string, string> = {
+  "T-Shirt": "T-Shirts",
+  "Long Sleeve": "Long Sleeve",
+  "Tank Top": "Tank Tops",
+  "Hoodie": "Hoodies",
+  "Full Zip Hoodie": "Hoodies",
+  "Crewneck": "Crewnecks",
+  "Heavyweight Crewneck": "Crewnecks",
+  "Performance T-Shirt": "Performance",
+  "Quarter Zip": "Quarter Zips",
+  "Polo": "Polos",
+  "Ranger Panty": "Shorts",
+  "Beanie": "Headwear",
+  "Dad Hat": "Headwear",
+  "Legacy Trucker": "Headwear",
+  "Retro Trucker": "Headwear",
+};
+
+export function getProductCategory(productType: string): string {
+  for (const [key, category] of Object.entries(CATEGORY_MAP)) {
+    if (productType.includes(key)) return category;
+  }
+  return "Other";
+}
+
+export function getProductColors(product: ShopifyProduct): string[] {
+  const colors = new Set<string>();
+  product.variants.nodes.forEach(v => {
+    v.selectedOptions.forEach(o => {
+      if (o.name === "Color") colors.add(o.value);
+    });
+  });
+  return [...colors];
+}
 
 export async function getProducts(first = 24): Promise<ShopifyProduct[]> {
   const data = await shopifyFetch<{ products: { nodes: ShopifyProduct[] } }>(`

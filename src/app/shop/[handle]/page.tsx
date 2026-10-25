@@ -1,8 +1,8 @@
 import { getProductByHandle, getProducts, formatPrice } from "@/lib/shopify";
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 import AddToCartButton from "./AddToCartButton";
+import ProductGallery from "./ProductGallery";
 import { ArrowLeft } from "lucide-react";
 
 export async function generateStaticParams() {
@@ -40,35 +40,7 @@ export default async function ProductPage({ params }: { params: Promise<{ handle
 
         <div className="grid md:grid-cols-2 gap-10">
           {/* Images */}
-          <div className="space-y-2">
-            {images.length > 0 ? (
-              <>
-                <div className="aspect-square bg-zinc-900 relative overflow-hidden">
-                  <Image
-                    src={images[0].url}
-                    alt={images[0].altText ?? product.title}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 768px) 100vw, 50vw"
-                    priority
-                  />
-                </div>
-                {images.length > 1 && (
-                  <div className="grid grid-cols-4 gap-2">
-                    {images.slice(1, 5).map((img, i) => (
-                      <div key={i} className="aspect-square bg-zinc-900 relative overflow-hidden">
-                        <Image src={img.url} alt={img.altText ?? ""} fill className="object-cover" sizes="15vw" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="aspect-square bg-zinc-900 flex items-center justify-center">
-                <span className="text-white/20 text-xs uppercase tracking-widest">No image</span>
-              </div>
-            )}
-          </div>
+          <ProductGallery images={images} title={product.title} />
 
           {/* Details */}
           <div className="flex flex-col">

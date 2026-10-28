@@ -7,6 +7,9 @@ import { FooterWrapper } from '@/components/layout/FooterWrapper'
 import { Providers } from '@/components/Providers'
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister'
 import { GA4Tracker } from '@/components/GA4Tracker'
+import { KioskTrigger } from '@/components/KioskTrigger'
+import { CartProvider } from '@/context/CartContext'
+import { CartDrawer } from '@/components/cart/CartDrawer'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const montserrat = Montserrat({ subsets: ['latin'], variable: '--font-montserrat', weight: ['400', '600', '700', '800'] })
@@ -67,7 +70,7 @@ const jsonLd = {
       name: 'Honor Bound FIT',
       alternateName: 'HBF',
       url: SITE_URL,
-      telephone: '+15407378337',
+      telephone: '+170****4184',
       description:
         'Veteran-owned strength and conditioning facility in Fredericksburg, VA offering small group training, personal training, rucking, and the Guardian Angel Program discount for veterans, active duty, first responders, medical students, and clergy.',
       address: {
@@ -160,10 +163,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </>
         )}
         <Providers>
-          <ServiceWorkerRegister />
-          <Navbar />
-          <main>{children}</main>
-          <FooterWrapper />
+          <CartProvider>
+            <ServiceWorkerRegister />
+            <Navbar />
+            <CartDrawer />
+            <main>{children}</main>
+            <FooterWrapper />
+            <KioskTrigger />
+          </CartProvider>
         </Providers>
       </body>
     </html>

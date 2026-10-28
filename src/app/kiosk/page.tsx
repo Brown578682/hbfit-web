@@ -174,7 +174,11 @@ export default function KioskPage() {
   }, [countdownActive, resetCountdown]);
 
   useEffect(() => {
-    if (code.length === 4) { setScreen("pin"); setError(""); }
+    // PIN auto-advances at exactly 4 digits; member code uses a confirm button
+  }, [code]);
+
+  const handleCodeConfirm = useCallback(() => {
+    if (code.length >= 4) { setScreen("pin"); setError(""); }
   }, [code]);
 
   useEffect(() => {
@@ -337,9 +341,17 @@ export default function KioskPage() {
         <h1 className="text-2xl font-bold font-montserrat text-white uppercase tracking-widest mb-2">
           Enter Member Code
         </h1>
-        <p className="text-white/40 text-sm mb-8">Your 4-digit ID number</p>
-        <Numpad value={code} onChange={setCode} maxLen={4} />
-        {error && <p className="text-red-400 text-sm mt-6">{error}</p>}
+        <p className="text-white/40 text-sm mb-8">Your member ID number</p>
+        <Numpad value={code} onChange={setCode} maxLen={7} />
+        <button
+          type="button"
+          onClick={handleCodeConfirm}
+          disabled={code.length < 4}
+          className="mt-6 w-64 bg-white text-black py-4 font-bold text-sm uppercase tracking-widest hover:bg-white/90 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          Continue
+        </button>
+        {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
       </KioskShell>
     );
 

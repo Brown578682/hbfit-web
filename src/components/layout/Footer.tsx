@@ -29,7 +29,7 @@ export function Footer() {
             </p>
             <p className="text-white/40 text-xs mt-2">45 Centreport Parkway, Suite 137</p>
             <p className="text-white/40 text-xs mt-1">
-              <a href="tel:+15407378337" className="hover:text-white/70 transition-colors">(540) 737-8337</a>
+              <a href="tel:+170****4184" className="hover:text-white/70 transition-colors">(703) 965-4184</a>
             </p>
             <div className="flex gap-3 mt-4">
               <a href="https://facebook.com/honorboundfit" target="_blank" rel="noopener noreferrer" className="text-white/40 hover:text-white transition-colors" aria-label="Facebook">
@@ -83,6 +83,7 @@ export function Footer() {
           <div className="flex gap-4">
             <Link href="/terms" className="text-white/30 hover:text-white/60 text-xs transition-colors">Terms</Link>
             <Link href="/privacy" className="text-white/30 hover:text-white/60 text-xs transition-colors">Privacy</Link>
+            <Link href="/kiosk" className="text-white/30 hover:text-white/60 text-xs transition-colors">Kiosk</Link>
           </div>
         </div>
       </div>

@@ -53,7 +53,7 @@ export default function ContactPage() {
             <h2 className="font-montserrat font-black text-2xl uppercase tracking-wide mb-8">Find Us</h2>
             <div className="space-y-6">
               {[
-                { label: "Phone", value: "(540) 737-8337", href: "tel:+15407378337" },
+                { label: "Phone", value: "(703) 965-4184", href: "tel:+170****4184" }
                 { label: "Address", value: "45 Centreport Pkwy, Suite 137\nFredericksburg, VA 22406", href: "https://maps.app.goo.gl/QRKu8SXYB48qPbB67" },
                 { label: "Email", value: "info@honorboundfit.com", href: "mailto:info@honorboundfit.com" },
               ].map(({ label, value, href }) => (

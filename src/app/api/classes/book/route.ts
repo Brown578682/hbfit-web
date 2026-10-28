@@ -57,8 +57,8 @@ export async function POST(req: NextRequest) {
   const slot = await getSlotByKey(slotId)
   if (!slot) return NextResponse.json({ error: 'Unknown or inactive slot' }, { status: 404 })
 
-  // Booking window: up to 30 min after class starts
-  const startTime = new Date(`${date}T${pad(slot.startHour)}:${pad(slot.startMinute)}:00`)
+  // Booking window: up to 30 min after class starts (times are Eastern — use toETDate to avoid UTC misread)
+  const startTime = toETDate(date, slot.startHour, slot.startMinute)
   const cutoff    = new Date(startTime.getTime() + 30 * 60 * 1000)
   if (new Date() > cutoff) return NextResponse.json({ error: 'Booking window has closed for this class' }, { status: 400 })
 

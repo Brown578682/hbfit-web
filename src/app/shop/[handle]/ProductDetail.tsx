@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { createCart, formatPrice, ShopifyProduct, ShopifyImage } from "@/lib/shopify";
+import { formatPrice, ShopifyProduct, ShopifyImage } from "@/lib/shopify";
+import { useCart } from "@/context/CartContext";
 import { Loader2, ShoppingBag } from "lucide-react";
 
 interface Props {
@@ -19,8 +20,8 @@ export default function ProductDetail({ product, allImages }: Props) {
     return defaults;
   });
 
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { addToCart, loading: cartLoading } = useCart();
 
   // Find matching variant
   const selectedVariant = product.variants.nodes.find(v =>
@@ -51,16 +52,13 @@ export default function ProductDetail({ product, allImages }: Props) {
     }
   };
 
-  const handleBuyNow = async () => {
+  const handleAddToCart = async () => {
     if (!selectedVariant) return;
-    setLoading(true);
     setError("");
     try {
-      const cart = await createCart(selectedVariant.id, 1);
-      window.location.href = cart.checkoutUrl;
+      await addToCart(selectedVariant.id, 1);
     } catch {
       setError("Something went wrong. Please try again.");
-      setLoading(false);
     }
   };
 
@@ -174,12 +172,12 @@ export default function ProductDetail({ product, allImages }: Props) {
 
           <button
             type="button"
-            onClick={handleBuyNow}
-            disabled={loading || !isAvailable}
+            onClick={handleAddToCart}
+            disabled={cartLoading || !isAvailable}
             className="w-full flex items-center justify-center gap-3 bg-white text-black py-4 font-bold text-sm uppercase tracking-widest hover:bg-white/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {loading ? <Loader2 size={16} className="animate-spin" /> : (
-              <><ShoppingBag size={16} />{isAvailable ? "Buy Now" : "Sold Out"}</>
+            {cartLoading ? <Loader2 size={16} className="animate-spin" /> : (
+              <><ShoppingBag size={16} />{isAvailable ? "Add to Cart" : "Sold Out"}</>
             )}
           </button>
 

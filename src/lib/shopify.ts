@@ -46,19 +46,25 @@ export interface ShopifyProduct {
   availableForSale: boolean;
 }
 
+export interface ShopifyCartLine {
+  id: string;
+  quantity: number;
+  merchandise: {
+    id: string;
+    title: string;
+    image: ShopifyImage | null;
+    selectedOptions: { name: string; value: string }[];
+    product: { title: string; featuredImage: ShopifyImage | null };
+  };
+  cost: { totalAmount: { amount: string; currencyCode: string } };
+}
+
 export interface ShopifyCart {
   id: string;
   checkoutUrl: string;
   totalQuantity: number;
   cost: { totalAmount: { amount: string; currencyCode: string } };
-  lines: {
-    nodes: {
-      id: string;
-      quantity: number;
-      merchandise: { id: string; title: string; product: { title: string; featuredImage: ShopifyImage | null } };
-      cost: { totalAmount: { amount: string; currencyCode: string } };
-    }[];
-  };
+  lines: { nodes: ShopifyCartLine[] };
 }
 
 // ── GraphQL fetch ──────────────────────────────────────────────────────────────
@@ -167,36 +173,84 @@ export async function getProductByHandle(handle: string): Promise<ShopifyProduct
   return data.product;
 }
 
+// ── Cart line fields (reused across mutations) ─────────────────────────────────
+
+const CART_FIELDS = `
+  id
+  checkoutUrl
+  totalQuantity
+  cost { totalAmount { amount currencyCode } }
+  lines(first: 20) {
+    nodes {
+      id
+      quantity
+      merchandise {
+        ... on ProductVariant {
+          id
+          title
+          image { url altText width height }
+          selectedOptions { name value }
+          product { title featuredImage { url altText width height } }
+        }
+      }
+      cost { totalAmount { amount currencyCode } }
+    }
+  }
+`;
+
 export async function createCart(variantId: string, quantity = 1): Promise<ShopifyCart> {
   const data = await shopifyFetch<{ cartCreate: { cart: ShopifyCart } }>(`
     mutation CartCreate($variantId: ID!, $quantity: Int!) {
       cartCreate(input: {
         lines: [{ merchandiseId: $variantId, quantity: $quantity }]
       }) {
-        cart {
-          id
-          checkoutUrl
-          totalQuantity
-          cost { totalAmount { amount currencyCode } }
-          lines(first: 10) {
-            nodes {
-              id
-              quantity
-              merchandise {
-                ... on ProductVariant {
-                  id
-                  title
-                  product { title featuredImage { url altText width height } }
-                }
-              }
-              cost { totalAmount { amount currencyCode } }
-            }
-          }
-        }
+        cart { ${CART_FIELDS} }
       }
     }
   `, { variantId, quantity });
   return data.cartCreate.cart;
+}
+
+export async function getCart(cartId: string): Promise<ShopifyCart | null> {
+  const data = await shopifyFetch<{ cart: ShopifyCart | null }>(`
+    query GetCart($cartId: ID!) {
+      cart(id: $cartId) { ${CART_FIELDS} }
+    }
+  `, { cartId });
+  return data.cart;
+}
+
+export async function addCartLines(cartId: string, variantId: string, quantity = 1): Promise<ShopifyCart> {
+  const data = await shopifyFetch<{ cartLinesAdd: { cart: ShopifyCart } }>(`
+    mutation CartLinesAdd($cartId: ID!, $lines: [CartLineInput!]!) {
+      cartLinesAdd(cartId: $cartId, lines: $lines) {
+        cart { ${CART_FIELDS} }
+      }
+    }
+  `, { cartId, lines: [{ merchandiseId: variantId, quantity }] });
+  return data.cartLinesAdd.cart;
+}
+
+export async function updateCartLines(cartId: string, lineId: string, quantity: number): Promise<ShopifyCart> {
+  const data = await shopifyFetch<{ cartLinesUpdate: { cart: ShopifyCart } }>(`
+    mutation CartLinesUpdate($cartId: ID!, $lines: [CartLineUpdateInput!]!) {
+      cartLinesUpdate(cartId: $cartId, lines: $lines) {
+        cart { ${CART_FIELDS} }
+      }
+    }
+  `, { cartId, lines: [{ id: lineId, quantity }] });
+  return data.cartLinesUpdate.cart;
+}
+
+export async function removeCartLines(cartId: string, lineIds: string[]): Promise<ShopifyCart> {
+  const data = await shopifyFetch<{ cartLinesRemove: { cart: ShopifyCart } }>(`
+    mutation CartLinesRemove($cartId: ID!, $lineIds: [ID!]!) {
+      cartLinesRemove(cartId: $cartId, lineIds: $lineIds) {
+        cart { ${CART_FIELDS} }
+      }
+    }
+  `, { cartId, lineIds });
+  return data.cartLinesRemove.cart;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────

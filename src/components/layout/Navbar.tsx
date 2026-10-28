@@ -3,8 +3,9 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Menu, X, User } from "lucide-react";
+import { Menu, X, User, ShoppingBag } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCart } from "@/context/CartContext";
 
 // Routes that have their own full-page layouts — suppress the public nav
 const APP_ROUTE_PREFIXES = ["/coach", "/dashboard", "/admin", "/onboarding", "/set-password", "/kiosk", "/login"];
@@ -31,6 +32,7 @@ const NAV_LINKS = [
 export function Navbar() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const { cart, setCartOpen } = useCart();
 
   // Don't render the public navbar inside app-specific layouts
   if (APP_ROUTE_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return null;
@@ -97,6 +99,19 @@ export function Navbar() {
             >
               JOIN NOW
             </Link>
+            {/* Cart icon */}
+            <button
+              onClick={() => setCartOpen(true)}
+              className="relative text-white/70 hover:text-white transition-colors p-1"
+              aria-label="Open cart"
+            >
+              <ShoppingBag size={20} />
+              {cart && cart.totalQuantity > 0 && (
+                <span className="absolute -top-1 -right-1 bg-white text-black text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                  {cart.totalQuantity}
+                </span>
+              )}
+            </button>
             {/* Mobile menu button */}
             <button
               className="lg:hidden text-white"

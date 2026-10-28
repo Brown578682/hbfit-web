@@ -30,8 +30,8 @@ export default async function ProductPage({ params }: { params: Promise<{ handle
 
   return (
     <main className="min-h-screen bg-black text-white">
-      <div className="max-w-5xl mx-auto px-6 py-10">
-        <Link href="/shop" className="inline-flex items-center gap-2 text-white/40 hover:text-white text-xs uppercase tracking-widest mb-8 transition-colors">
+      <div className="max-w-5xl mx-auto px-6 pt-24 pb-10">
+        <Link href="/shop" className="inline-flex items-center gap-2 border border-white/20 text-white/70 hover:text-white hover:border-white/60 text-xs uppercase tracking-widest px-4 py-2 mb-8 transition-all">
           <ArrowLeft size={14} /> Back to Shop
         </Link>
         <ProductDetail product={product} allImages={allImages} />

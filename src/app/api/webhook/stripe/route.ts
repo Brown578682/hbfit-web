@@ -162,7 +162,10 @@ export async function POST(req: NextRequest) {
     // ── Drop-in / 10-pack credit top-up (one-time payment, no customer required) ──
     if (session.metadata?.type === 'drop-in' || session.metadata?.type === 'ten-pack') {
       const credits      = parseInt(session.metadata.credits ?? '1', 10);
-      const memberEmail  = session.metadata.memberEmail || session.customer_email || '';
+      const memberEmail  = session.metadata.memberEmail
+                        || session.customer_email
+                        || (session.customer_details as { email?: string } | null)?.email
+                        || '';
       const memberFirst  = session.metadata.memberFirstName || '';
       const memberLast   = session.metadata.memberLastName  || '';
 
@@ -214,23 +217,32 @@ export async function POST(req: NextRequest) {
 
         console.log(`[webhook] +${credits} class credits → member ${member.id} (${memberEmail})${isNewAccount ? ' [new account]' : ''}`);
 
-        // Send set-password email for new accounts
-        if (isNewAccount) {
-          try {
-            const appUrl = process.env.NEXTAUTH_URL ?? 'https://honorboundfit.com';
+        // Send confirmation email to ALL drop-in purchases
+        try {
+          const appUrl = process.env.NEXTAUTH_URL ?? 'https://honorboundfit.com';
+          const displayName = memberFirst || memberEmail.split('@')[0];
+
+          if (isNewAccount) {
+            // New account — send set-password welcome email
             const token = await createSetPasswordToken(memberEmail);
             const setPasswordUrl = `${appUrl}/set-password?token=${token}`;
-            const displayName = memberFirst || memberEmail.split('@')[0];
-
             await sendDropInWelcomeEmail({
               to:             memberEmail,
               firstName:      displayName,
               credits,
               setPasswordUrl,
             });
-          } catch (emailErr) {
-            console.error('[webhook] drop-in welcome email failed:', emailErr);
+          } else {
+            // Existing account — send credits-added confirmation
+            await sendDropInWelcomeEmail({
+              to:             memberEmail,
+              firstName:      displayName,
+              credits,
+              setPasswordUrl: `${appUrl}/dashboard`,
+            });
           }
+        } catch (emailErr) {
+          console.error('[webhook] drop-in email failed:', emailErr);
         }
       }
       return NextResponse.json({ received: true });

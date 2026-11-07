@@ -20,7 +20,9 @@ function isF3RateLimited(ip: string): boolean {
 
 // ── Bot detection ─────────────────────────────────────────────────────────────
 function looksLikeBotName(name: string): boolean {
+  if (!name || name.length < 2) return true;
   if (name.length > 30) return true;
+  // Alternating case pattern (existing check)
   if (/[A-Z]{5,}/.test(name)) return true;
   const altCase = name.replace(/[^a-zA-Z]/g, '');
   if (altCase.length >= 8) {
@@ -32,6 +34,16 @@ function looksLikeBotName(name: string): boolean {
     }
     if (alternations / altCase.length > 0.7) return true;
   }
+  // New: consonant cluster detection — 4+ consecutive consonants = gibberish
+  const lower = name.toLowerCase().replace(/[^a-z]/g, '');
+  const consonantRun = lower.match(/[bcdfghjklmnpqrstvwxyz]{4,}/);
+  if (consonantRun) return true;
+  // New: no vowels at all in a name longer than 3 chars
+  if (lower.length > 3 && !/[aeiou]/.test(lower)) return true;
+  // New: too many unique consonants in a short name (random string pattern)
+  const vowels = (lower.match(/[aeiou]/g) || []).length;
+  const vowelRatio = lower.length > 0 ? vowels / lower.length : 0;
+  if (lower.length > 5 && vowelRatio < 0.15) return true;
   return false;
 }
 function looksLikeBotEmail(email: string): boolean {
@@ -39,6 +51,14 @@ function looksLikeBotEmail(email: string): boolean {
   const segments = local.split('.');
   const singleChars = segments.filter((s: string) => s.length === 1).length;
   return singleChars >= 4;
+}
+function looksLikeBotEmailDomain(email: string): boolean {
+  // Flag known disposable/throwaway email domains commonly used by bots
+  const throwawayDomains = ['mailinator.com','guerrillamail.com','tempmail.com','throwam.com',
+    'sharklasers.com','guerrillamailblock.com','grr.la','guerrillamail.info','spam4.me',
+    'trashmail.com','yopmail.com','dispostable.com','maildrop.cc','fakeinbox.com'];
+  const domain = email.split('@')[1]?.toLowerCase() ?? '';
+  return throwawayDomains.includes(domain);
 }
 
 export async function POST(req: NextRequest) {
@@ -54,7 +74,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     // ── Honeypot ──────────────────────────────────────────────────────────────
-    if (body.website) {
+    if (body.website || body.hb_website) {
+      return NextResponse.json({ ok: true }, { status: 201 });
+    }
+
+    // ── Timing check ─────────────────────────────────────────────────────────
+    const formLoadedAt = Number(body.formLoadedAt);
+    if (!isNaN(formLoadedAt) && Date.now() - formLoadedAt < 4000) {
+      console.warn(`[f3/apply] Timing bot from ${ip}: form submitted too fast`);
       return NextResponse.json({ ok: true }, { status: 201 });
     }
 
@@ -106,6 +133,10 @@ export async function POST(req: NextRequest) {
     }
     if (looksLikeBotEmail(email)) {
       console.warn(`[f3/apply] Bot email from ${ip}: ${email}`);
+      return NextResponse.json({ ok: true }, { status: 201 });
+    }
+    if (looksLikeBotEmailDomain(email)) {
+      console.warn(`[f3/apply] Throwaway email domain from ${ip}: ${email}`);
       return NextResponse.json({ ok: true }, { status: 201 });
     }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, FormEvent } from 'react'
+import { useState, useRef, FormEvent } from 'react'
 import Link from 'next/link'
 import { ChevronRight, CheckCircle2 } from 'lucide-react'
 
@@ -57,6 +57,8 @@ export default function F3ApplyPage() {
     additionalNotes: '',
     consent: false,
   })
+  const [honeypot, setHoneypot] = useState('')
+  const formStartTime = useRef(Date.now())
   const [errors, setErrors] = useState<FormErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -117,6 +119,8 @@ export default function F3ApplyPage() {
           agencyName: form.agencyName.trim() || undefined,
           heardAboutUs: form.heardAboutUs.trim() || undefined,
           additionalNotes: form.additionalNotes.trim() || undefined,
+          hb_website: honeypot,
+          formLoadedAt: formStartTime.current,
         }),
       })
       const data = await res.json()
@@ -230,8 +234,19 @@ export default function F3ApplyPage() {
         <div className="max-w-3xl mx-auto">
           <form onSubmit={handleSubmit} noValidate>
 
-            {/* Hidden honeypot */}
-            <input type="text" name="website" className="hidden" tabIndex={-1} autoComplete="off" />
+            {/* Honeypot — do not fill */}
+            <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', opacity: 0, pointerEvents: 'none', tabIndex: -1 } as React.CSSProperties} aria-hidden="true">
+              <label htmlFor="hb_website">Website</label>
+              <input
+                type="text"
+                id="hb_website"
+                name="hb_website"
+                value={honeypot}
+                onChange={e => setHoneypot(e.target.value)}
+                autoComplete="off"
+                tabIndex={-1}
+              />
+            </div>
 
             {/* Server error */}
             {serverError && (

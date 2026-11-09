@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import Link from 'next/link';
 
 const BRANCHES = [
@@ -13,6 +13,7 @@ const BRANCHES = [
 ];
 
 export default function PooleeJoinPage() {
+  const formStartTime = useRef(Date.now());
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', phone: '',
     branch: '', shipDate: '', recruiterName: '', recruiterPhone: '',
@@ -39,7 +40,7 @@ export default function PooleeJoinPage() {
       const res = await fetch('/api/join/poolee', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, formLoadedAt: formStartTime.current }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? 'Something went wrong.'); return; }

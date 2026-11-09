@@ -23,12 +23,11 @@ function isRateLimited(ip: string): boolean {
 }
 
 // ── Name sanity check — rejects random-character strings ─────────────────────
-// Real names: mostly lowercase with a capital, max ~20 chars, no long uppercase runs.
+// Real names: mostly lowercase with a capital, max ~30 chars, no long uppercase runs.
 function looksLikeBotName(name: string): boolean {
+  if (!name || name.length < 2) return true;
   if (name.length > 30) return true;
-  // More than 4 consecutive uppercase letters = generated string
   if (/[A-Z]{5,}/.test(name)) return true;
-  // Alternating-case gibberish: aBcDeFg pattern over 8+ chars
   const altCase = name.replace(/[^a-zA-Z]/g, '');
   if (altCase.length >= 8) {
     let alternations = 0;
@@ -37,8 +36,13 @@ function looksLikeBotName(name: string): boolean {
       const currUpper = altCase[i] === altCase[i].toUpperCase();
       if (prevUpper !== currUpper) alternations++;
     }
-    if (alternations / altCase.length > 0.7) return true;
+    if (alternations / altCase.length > 0.6) return true;
   }
+  const lower = name.toLowerCase().replace(/[^a-z]/g, '');
+  if (/[bcdfghjklmnpqrstvwxyz]{4,}/.test(lower)) return true;
+  if (lower.length > 3 && !/[aeiou]/.test(lower)) return true;
+  const vowels = (lower.match(/[aeiou]/g) || []).length;
+  if (lower.length > 5 && vowels / lower.length < 0.15) return true;
   return false;
 }
 
@@ -46,10 +50,18 @@ function looksLikeBotName(name: string): boolean {
 // Bots generate addresses like: lu.t.zt.e.re.n.s.39@gmail.com
 function looksLikeBotEmail(email: string): boolean {
   const local = email.split('@')[0] ?? '';
-  // More than 4 single-char segments separated by dots = bot pattern
   const segments = local.split('.');
-  const singleChars = segments.filter(s => s.length === 1).length;
-  if (singleChars >= 4) return true;
+  const singleChars = segments.filter((s: string) => s.length === 1).length;
+  if (singleChars >= 3) return true; // lowered from 4 to 3
+  // Flag dot-heavy patterns: more than 40% of segments are 1-2 chars
+  const shortSegments = segments.filter((s: string) => s.length <= 2).length;
+  if (segments.length >= 4 && shortSegments / segments.length > 0.5) return true;
+  // Throwaway domains
+  const throwaway = ['mailinator.com','guerrillamail.com','tempmail.com','throwam.com',
+    'sharklasers.com','grr.la','guerrillamail.info','spam4.me','trashmail.com',
+    'yopmail.com','dispostable.com','maildrop.cc','fakeinbox.com'];
+  const domain = email.split('@')[1]?.toLowerCase() ?? '';
+  if (throwaway.includes(domain)) return true;
   return false;
 }
 
@@ -73,6 +85,13 @@ export async function POST(req: NextRequest) {
     // ── Honeypot check ───────────────────────────────────────────────────────
     if (website) {
       // Silently succeed so bots don't know they were blocked
+      return NextResponse.json({ ok: true }, { status: 201 });
+    }
+
+    // Timing check — bots submit instantly
+    const formLoadedAt = Number(body.formLoadedAt ?? 0);
+    if (formLoadedAt && Date.now() - formLoadedAt < 4000) {
+      console.warn(`[poolee] Timing bot from ${ip}`);
       return NextResponse.json({ ok: true }, { status: 201 });
     }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { MessageSquare, ChevronLeft, Send, Clock, Users, Mail, CheckCheck } from "lucide-react";
+import { MessageSquare, ChevronLeft, Send, Clock, Users, Mail, CheckCheck, Trash2 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ThreadSummary {
@@ -70,6 +70,11 @@ export default function CoachMessagesPage() {
   const [replyingContact, setReplyingContact] = useState<string | null>(null);
   const [contactReplyBody, setContactReplyBody] = useState<Record<string, string>>({});
   const [sendingReply, setSendingReply] = useState<string | null>(null);
+
+  // ── Bulk delete state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deletingContacts, setDeletingContacts] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/me").then(r => r.json()).then(d => {
@@ -150,6 +155,39 @@ export default function CoachMessagesPage() {
       }
     } finally {
       setSendingReply(null);
+    }
+  };
+
+  const toggleSelect = (id: string, checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} message(s)? This cannot be undone.`)) return;
+    setDeletingContacts(true);
+    try {
+      const res = await fetch("/api/admin/messages/contact/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [...selectedIds] }),
+      });
+      if (!res.ok) throw new Error("Delete failed");
+      setContacts(prev => prev.filter(m => !selectedIds.has(m.id)));
+      setContactUnread(prev => {
+        const deletedUnread = contacts.filter(m => selectedIds.has(m.id) && !m.readAt).length;
+        return Math.max(0, prev - deletedUnread);
+      });
+      setSelectedIds(new Set());
+    } catch {
+      setDeleteError("Failed to delete. Please try again.");
+      setTimeout(() => setDeleteError(null), 3000);
+    } finally {
+      setDeletingContacts(false);
     }
   };
 
@@ -240,7 +278,7 @@ export default function CoachMessagesPage() {
         ].map(({ key, label, icon: Icon, badge }) => (
           <button
             key={key}
-            onClick={() => setTab(key as "threads" | "contact")}
+            onClick={() => { setTab(key as "threads" | "contact"); setSelectedIds(new Set()); }}
             className={`flex items-center gap-2 px-5 py-3 font-montserrat text-sm font-semibold border-b-2 transition-colors ${
               tab === key ? "border-white text-white" : "border-transparent text-zinc-500 hover:text-zinc-300"
             }`}
@@ -313,50 +351,93 @@ export default function CoachMessagesPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {contactUnread > 0 && (
-              <div className="flex justify-end">
-                <button
-                  onClick={async () => {
-                    const unread = contacts.filter(m => !m.readAt);
-                    for (const m of unread) await fetch(`/api/admin/messages/contact/${m.id}/read`, { method: "POST" });
-                    setContacts(prev => prev.map(m => ({ ...m, readAt: m.readAt ?? new Date().toISOString() })));
-                    setContactUnread(0);
+            {/* Action bar */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="rounded border-zinc-600 bg-zinc-800 accent-red-600 cursor-pointer w-4 h-4"
+                  checked={contacts.length > 0 && contacts.every(m => selectedIds.has(m.id))}
+                  onChange={e => {
+                    if (e.target.checked) setSelectedIds(new Set(contacts.map(m => m.id)));
+                    else setSelectedIds(new Set());
                   }}
-                  className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-montserrat text-xs font-semibold rounded-lg border border-zinc-700 transition-colors"
-                >
-                  <CheckCheck size={14} /> Mark all read
-                </button>
+                />
+                <span className="font-montserrat text-xs text-zinc-500">
+                  {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select all"}
+                </span>
               </div>
-            )}
+              <div className="flex items-center gap-2">
+                {selectedIds.size > 0 && (
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={deletingContacts}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white font-montserrat text-xs font-bold rounded-lg border border-red-700 transition-colors"
+                  >
+                    <Trash2 size={13} />
+                    {deletingContacts ? "Deleting…" : `Delete (${selectedIds.size})`}
+                  </button>
+                )}
+                {contactUnread > 0 && (
+                  <button
+                    onClick={async () => {
+                      const unread = contacts.filter(m => !m.readAt);
+                      for (const m of unread) await fetch(`/api/admin/messages/contact/${m.id}/read`, { method: "POST" });
+                      setContacts(prev => prev.map(m => ({ ...m, readAt: m.readAt ?? new Date().toISOString() })));
+                      setContactUnread(0);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-montserrat text-xs font-semibold rounded-lg border border-zinc-700 transition-colors"
+                  >
+                    <CheckCheck size={14} /> Mark all read
+                  </button>
+                )}
+              </div>
+            </div>
+
             {contacts.map(m => (
               <div
                 key={m.id}
-                className={`bg-zinc-900 border rounded-xl transition-all ${!m.readAt ? "border-blue-500/40" : "border-zinc-800"}`}
+                className={`bg-zinc-900 border rounded-xl transition-all ${
+                  selectedIds.has(m.id) ? "border-red-500/40" : !m.readAt ? "border-blue-500/40" : "border-zinc-800"
+                }`}
               >
-                <button
-                  className="w-full text-left px-5 pt-5 pb-3"
-                  onClick={() => {
-                    setExpandedContact(expandedContact === m.id ? null : m.id);
-                    if (!m.readAt) markContactRead(m.id);
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="font-montserrat font-bold text-sm text-white">{m.name}</span>
-                        <span className="font-lora text-xs text-zinc-500">{m.email}</span>
-                        {!m.readAt && (
-                          <span className="bg-blue-500/20 text-blue-400 text-xs font-montserrat font-semibold px-2 py-0.5 rounded-full">New</span>
-                        )}
+                <div className="w-full text-left px-5 pt-5 pb-3">
+                  <div className="flex items-start gap-3">
+                    {/* Checkbox */}
+                    <input
+                      type="checkbox"
+                      className="rounded border-zinc-600 bg-zinc-800 accent-red-600 cursor-pointer w-4 h-4 mt-0.5 shrink-0"
+                      checked={selectedIds.has(m.id)}
+                      onChange={e => toggleSelect(m.id, e.target.checked)}
+                      onClick={e => e.stopPropagation()}
+                    />
+                    {/* Content — clickable to expand */}
+                    <button
+                      className="flex-1 min-w-0 text-left"
+                      onClick={() => {
+                        setExpandedContact(expandedContact === m.id ? null : m.id);
+                        if (!m.readAt) markContactRead(m.id);
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="font-montserrat font-bold text-sm text-white">{m.name}</span>
+                            <span className="font-lora text-xs text-zinc-500">{m.email}</span>
+                            {!m.readAt && (
+                              <span className="bg-blue-500/20 text-blue-400 text-xs font-montserrat font-semibold px-2 py-0.5 rounded-full">New</span>
+                            )}
+                          </div>
+                          {m.subject && <p className="font-montserrat text-xs text-zinc-500 mb-1">{m.subject}</p>}
+                          <p className="font-lora text-xs text-zinc-600 truncate">{m.message}</p>
+                        </div>
+                        <span className="shrink-0 flex items-center gap-1 font-lora text-xs text-zinc-600">
+                          <Clock size={11} />{timeAgo(m.sentAt)}
+                        </span>
                       </div>
-                      {m.subject && <p className="font-montserrat text-xs text-zinc-500 mb-1">{m.subject}</p>}
-                      <p className="font-lora text-xs text-zinc-600 truncate">{m.message}</p>
-                    </div>
-                    <span className="shrink-0 flex items-center gap-1 font-lora text-xs text-zinc-600">
-                      <Clock size={11} />{timeAgo(m.sentAt)}
-                    </span>
+                    </button>
                   </div>
-                </button>
+                </div>
                 {expandedContact === m.id && (
                   <div className="px-5 pb-5 border-t border-zinc-800 pt-4">
                     <p className="font-lora text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap mb-4">{m.message}</p>
@@ -405,6 +486,13 @@ export default function CoachMessagesPage() {
             ))}
           </div>
         )
+      )}
+
+      {/* Error toast */}
+      {deleteError && (
+        <div className="fixed bottom-6 right-6 bg-red-700 text-white font-montserrat text-sm font-semibold px-5 py-3 rounded-lg shadow-xl z-50">
+          {deleteError}
+        </div>
       )}
     </div>
   );

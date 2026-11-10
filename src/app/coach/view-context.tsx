@@ -1,5 +1,5 @@
 'use client'
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 
 export type ViewMode = 'manager' | 'coach' | 'member' | 'coach-view'
 
@@ -31,7 +31,20 @@ const ViewContext = createContext<ViewContextType>({
 })
 
 export function ViewProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<ViewMode>('coach')
+  const [mode, setModeState] = useState<ViewMode>('coach')
+
+  // Persist mode across page refreshes
+  useEffect(() => {
+    const saved = localStorage.getItem('hbfit-view-mode') as ViewMode | null
+    if (saved && ['manager', 'coach'].includes(saved)) setModeState(saved)
+  }, [])
+
+  const setMode = (m: ViewMode) => {
+    setModeState(m)
+    if (m === 'manager' || m === 'coach') {
+      localStorage.setItem('hbfit-view-mode', m)
+    }
+  }
   const [impersonatedMemberId, setImpersonatedMemberId] = useState<string | null>(null)
   const [impersonatedMemberName, setImpersonatedMemberName] = useState<string | null>(null)
   const [impersonatedCoachId, setImpersonatedCoachId] = useState<string | null>(null)

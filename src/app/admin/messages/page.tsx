@@ -43,6 +43,10 @@ export default function AdminMessagesPage() {
   const [contactReplyBody, setContactReplyBody] = useState<Record<string, string>>({});
   const [sendingReply, setSendingReply] = useState<string | null>(null);
 
+  // Bulk select/delete for contacts
+  const [contactSelectedIds, setContactSelectedIds] = useState<Set<string>>(new Set());
+  const [deletingContacts, setDeletingContacts] = useState(false);
+
   // ── Thread state
   const [threads, setThreads]             = useState<ThreadSummary[]>([]);
   const [threadUnread, setThreadUnread]   = useState(0);
@@ -89,6 +93,24 @@ export default function AdminMessagesPage() {
       }
     } finally {
       setSendingReply(null);
+    }
+  };
+
+  const handleBulkDeleteContacts = async () => {
+    if (contactSelectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${contactSelectedIds.size} message(s)? This cannot be undone.`)) return;
+    setDeletingContacts(true);
+    try {
+      const res = await fetch('/api/admin/messages/contact/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...contactSelectedIds] }),
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      setContacts(prev => prev.filter(m => !contactSelectedIds.has(m.id)));
+      setContactSelectedIds(new Set());
+    } finally {
+      setDeletingContacts(false);
     }
   };
 
@@ -268,19 +290,30 @@ export default function AdminMessagesPage() {
             </div>
           ) : (
             <>
-              {contactUnread > 0 && (
-                <div className="flex justify-end">
-                  <button
-                    onClick={async () => {
-                      const unread = contacts.filter((m) => !m.readAt);
-                      for (const m of unread) await fetch(`/api/admin/messages/contact/${m.id}/read`, { method: "POST" });
-                      setContacts((prev) => prev.map((m) => ({ ...m, readAt: m.readAt ?? new Date().toISOString() })));
-                      setContactUnread(0);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-montserrat text-xs font-semibold rounded-lg border border-zinc-700 transition-colors"
-                  >
-                    <CheckCheck size={14} /> Mark all read
-                  </button>
+              {(contactUnread > 0 || contactSelectedIds.size > 0) && (
+                <div className="flex justify-end gap-3">
+                  {contactSelectedIds.size > 0 && (
+                    <button
+                      onClick={handleBulkDeleteContacts}
+                      disabled={deletingContacts}
+                      className="flex items-center gap-2 bg-red-700 hover:bg-red-600 text-white font-montserrat text-xs font-bold px-4 py-2 rounded-lg border border-red-700 transition-colors disabled:opacity-50"
+                    >
+                      Delete ({contactSelectedIds.size})
+                    </button>
+                  )}
+                  {contactUnread > 0 && (
+                    <button
+                      onClick={async () => {
+                        const unread = contacts.filter((m) => !m.readAt);
+                        for (const m of unread) await fetch(`/api/admin/messages/contact/${m.id}/read`, { method: "POST" });
+                        setContacts((prev) => prev.map((m) => ({ ...m, readAt: m.readAt ?? new Date().toISOString() })));
+                        setContactUnread(0);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-montserrat text-xs font-semibold rounded-lg border border-zinc-700 transition-colors"
+                    >
+                      <CheckCheck size={14} /> Mark all read
+                    </button>
+                  )}
                 </div>
               )}
               {contacts.map((m) => (
@@ -305,8 +338,19 @@ export default function AdminMessagesPage() {
                         {m.subject && <p className="font-montserrat text-xs text-zinc-500 mb-1">{m.subject}</p>}
                         <p className="font-lora text-xs text-zinc-600 truncate">{m.message}</p>
                       </div>
-                      <span className="shrink-0 flex items-center gap-1 font-lora text-xs text-zinc-600">
+                      <span className="shrink-0 flex items-center gap-2 font-lora text-xs text-zinc-600">
                         <Clock size={11} />{timeAgo(m.sentAt)}
+                        <input
+                          type="checkbox"
+                          className="rounded border-zinc-600 bg-zinc-800 accent-red-600 cursor-pointer shrink-0"
+                          checked={contactSelectedIds.has(m.id)}
+                          onClick={e => e.stopPropagation()}
+                          onChange={e => {
+                            const next = new Set(contactSelectedIds);
+                            if (e.target.checked) next.add(m.id); else next.delete(m.id);
+                            setContactSelectedIds(next);
+                          }}
+                        />
                       </span>
                     </div>
                   </button>

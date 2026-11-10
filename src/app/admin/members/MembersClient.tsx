@@ -84,6 +84,11 @@ export default function MembersClient({
   const [total, setTotal] = useState(initialTotal);
   const [loading, setLoading] = useState(false);
 
+  // Bulk select/delete state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const fetchMembers = useCallback(
     async (q: string, status: string) => {
       setLoading(true);
@@ -127,6 +132,28 @@ export default function MembersClient({
     fetchMembers(search, val);
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} member(s)? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch('/api/admin/members/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds] }),
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      setMembers(prev => prev.filter(m => !selectedIds.has(m.id)));
+      setTotal(prev => prev - selectedIds.size);
+      setSelectedIds(new Set());
+    } catch {
+      setDeleteError('Failed to delete. Please try again.');
+      setTimeout(() => setDeleteError(null), 3000);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="p-8 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -151,6 +178,15 @@ export default function MembersClient({
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              disabled={deleting}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white font-montserrat text-sm font-bold transition-colors disabled:opacity-50"
+            >
+              Delete ({selectedIds.size})
+            </button>
+          )}
           <button
             onClick={() => exportCsv(filtered)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-montserrat text-sm font-semibold transition-colors border border-zinc-700"
@@ -230,6 +266,16 @@ export default function MembersClient({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-800">
+                <th className="px-5 py-3.5 w-10">
+                  <input type="checkbox"
+                    className="rounded border-zinc-600 bg-zinc-800 accent-red-600 cursor-pointer"
+                    checked={filtered.length > 0 && filtered.every(m => selectedIds.has(m.id))}
+                    onChange={e => {
+                      if (e.target.checked) setSelectedIds(new Set(filtered.map(m => m.id)));
+                      else setSelectedIds(new Set());
+                    }}
+                  />
+                </th>
                 {[
                   "Name",
                   "Email",
@@ -253,7 +299,7 @@ export default function MembersClient({
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="text-center py-12 text-zinc-500 font-lora"
                   >
                     {loading ? "Loading members…" : "No members match your search."}
@@ -262,6 +308,17 @@ export default function MembersClient({
               ) : (
                 filtered.map((m) => (
                   <tr key={m.id} className="hover:bg-zinc-800/40 transition-colors">
+                    <td className="px-5 py-4">
+                      <input type="checkbox"
+                        className="rounded border-zinc-600 bg-zinc-800 accent-red-600 cursor-pointer"
+                        checked={selectedIds.has(m.id)}
+                        onChange={e => {
+                          const next = new Set(selectedIds);
+                          if (e.target.checked) next.add(m.id); else next.delete(m.id);
+                          setSelectedIds(next);
+                        }}
+                      />
+                    </td>
                     <td className="px-5 py-4 font-montserrat font-semibold text-white whitespace-nowrap">
                       {m.firstName} {m.lastName}
                       {m.gapEligible && (
@@ -317,6 +374,13 @@ export default function MembersClient({
           </table>
         </div>
       </div>
+
+      {/* Error toast */}
+      {deleteError && (
+        <div className="fixed bottom-6 right-6 bg-red-700 text-white font-montserrat text-sm font-semibold px-5 py-3 rounded-lg shadow-lg z-50">
+          {deleteError}
+        </div>
+      )}
     </div>
   );
 }

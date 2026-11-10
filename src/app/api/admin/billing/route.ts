@@ -206,6 +206,7 @@ export async function GET() {
     } catch { /* non-fatal */ }
 
     // Free/zero-dollar memberships: active members with no Stripe customer
+    // Exclude household subordinates (non-primaries) — they're billed through the primary
     const freeMembers = await prisma.member.findMany({
       where: {
         status: 'ACTIVE',
@@ -213,6 +214,13 @@ export async function GET() {
           { stripeCustomerId: null },
           { stripeCustomerId: '' },
         ],
+        // Exclude household add-ons — they're covered by the primary's subscription
+        NOT: {
+          AND: [
+            { householdId: { not: null } },
+            { isHouseholdPrimary: false },
+          ],
+        },
       },
       select: {
         id: true,

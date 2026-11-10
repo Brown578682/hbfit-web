@@ -49,10 +49,12 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 // ─── Mobile card ─────────────────────────────────────────────────────────────
-function MemberCard({ m, impersonateMember, router }: {
+function MemberCard({ m, impersonateMember, router, selectedIds, toggleId }: {
   m: any
   impersonateMember: (id: string, name: string) => void
   router: any
+  selectedIds: Set<string>
+  toggleId: (id: string, checked: boolean) => void
 }) {
   const [open, setOpen] = useState(false)
   const hasKids = m.dependents?.length > 0
@@ -87,6 +89,13 @@ function MemberCard({ m, impersonateMember, router }: {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <input
+            type="checkbox"
+            className="rounded border-zinc-600 bg-zinc-800 accent-red-600 cursor-pointer"
+            checked={selectedIds.has(m.id)}
+            onChange={e => toggleId(m.id, e.target.checked)}
+            onClick={e => e.stopPropagation()}
+          />
           {hasKids && (
             <button
               onClick={() => setOpen(o => !o)}
@@ -153,11 +162,13 @@ function MemberCard({ m, impersonateMember, router }: {
 }
 
 // ─── Desktop table row ────────────────────────────────────────────────────────
-function MemberRow({ m, depth = 0, impersonateMember, router }: {
+function MemberRow({ m, depth = 0, impersonateMember, router, selectedIds, toggleId }: {
   m: any
   depth?: number
   impersonateMember: (id: string, name: string) => void
   router: any
+  selectedIds: Set<string>
+  toggleId: (id: string, checked: boolean) => void
 }) {
   const [open, setOpen] = useState(true)
   const hasKids = m.dependents?.length > 0
@@ -166,6 +177,15 @@ function MemberRow({ m, depth = 0, impersonateMember, router }: {
   return (
     <>
       <tr className={`border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors ${indent ? 'bg-zinc-950/60' : ''}`}>
+        <td className="px-3 py-3 w-8">
+          <input
+            type="checkbox"
+            className="rounded border-zinc-600 bg-zinc-800 accent-red-600 cursor-pointer"
+            checked={selectedIds.has(m.id)}
+            onChange={e => toggleId(m.id, e.target.checked)}
+            onClick={e => e.stopPropagation()}
+          />
+        </td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-2" style={{ paddingLeft: indent ? '1.5rem' : undefined }}>
             {hasKids && (
@@ -216,7 +236,7 @@ function MemberRow({ m, depth = 0, impersonateMember, router }: {
         </td>
       </tr>
       {hasKids && open && m.dependents.map((dep: any) => (
-        <MemberRow key={dep.id} m={dep} depth={depth + 1} impersonateMember={impersonateMember} router={router} />
+        <MemberRow key={dep.id} m={dep} depth={depth + 1} impersonateMember={impersonateMember} router={router} selectedIds={selectedIds} toggleId={toggleId} />
       ))}
     </>
   )
@@ -233,6 +253,9 @@ export default function CoachMembersPage() {
   const [loading, setLoading] = useState(true)
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const { impersonateMember } = useView()
   const router = useRouter()
@@ -269,6 +292,47 @@ export default function CoachMembersPage() {
       return sortDir === 'asc' ? cmp : -cmp
     })
   }, [members, sortKey, sortDir])
+
+  const toggleId = useCallback((id: string, checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (checked) next.add(id); else next.delete(id)
+      return next
+    })
+  }, [])
+
+  const allVisibleIds = useMemo(() => {
+    const ids: string[] = []
+    for (const m of sorted) {
+      ids.push(m.id)
+      for (const d of (m.dependents ?? [])) ids.push(d.id)
+    }
+    return ids
+  }, [sorted])
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!window.confirm(`Delete ${selectedIds.size} member(s)? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/admin/members/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds] }),
+      })
+      if (!res.ok) throw new Error('Delete failed')
+      setMembers(prev => prev.filter(m =>
+        !selectedIds.has(m.id) && !(m.dependents ?? []).every((d: any) => selectedIds.has(d.id))
+      ))
+      setSelectedIds(new Set())
+      load()
+    } catch {
+      setDeleteError('Failed to delete. Please try again.')
+      setTimeout(() => setDeleteError(null), 3000)
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   function handleSort(key: SortKey) {
     if (key === sortKey) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -309,6 +373,23 @@ export default function CoachMembersPage() {
         <p className="font-montserrat text-xs uppercase tracking-[0.3em] text-zinc-500 mb-1">Coach Portal</p>
         <h1 className="font-montserrat font-black text-3xl uppercase tracking-tight">Members</h1>
         <p className="text-zinc-400 text-sm mt-1">{displayTotal} total</p>
+        {selectedIds.size > 0 && (
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              onClick={handleBulkDelete}
+              disabled={deleting}
+              className="flex items-center gap-2 px-4 py-2 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white font-montserrat text-sm font-bold transition-colors rounded"
+            >
+              {deleting ? 'Deleting…' : `Delete (${selectedIds.size})`}
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="text-zinc-500 hover:text-white font-montserrat text-xs uppercase tracking-wider transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filters */}
@@ -365,7 +446,7 @@ export default function CoachMembersPage() {
         ) : sorted.length === 0 ? (
           <p className="text-center text-zinc-500 font-lora italic py-12">No members found.</p>
         ) : sorted.map((m: any) => (
-          <MemberCard key={m.id} m={m} impersonateMember={impersonateMember} router={router} />
+          <MemberCard key={m.id} m={m} impersonateMember={impersonateMember} router={router} selectedIds={selectedIds} toggleId={toggleId} />
         ))}
       </div>
 
@@ -374,6 +455,17 @@ export default function CoachMembersPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-zinc-800">
+              <th className="px-3 py-3 w-8">
+                <input
+                  type="checkbox"
+                  className="rounded border-zinc-600 bg-zinc-800 accent-red-600 cursor-pointer"
+                  checked={allVisibleIds.length > 0 && allVisibleIds.every(id => selectedIds.has(id))}
+                  onChange={e => {
+                    if (e.target.checked) setSelectedIds(new Set(allVisibleIds))
+                    else setSelectedIds(new Set())
+                  }}
+                />
+              </th>
               <ColHeader label="Name" col="name" />
               <th className="text-left px-4 py-3 font-montserrat text-xs uppercase tracking-wider text-zinc-500">Email</th>
               <ColHeader label="Status" col="status" />
@@ -385,15 +477,20 @@ export default function CoachMembersPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className="px-4 py-12 text-center text-zinc-500 font-lora italic">Loading...</td></tr>
+              <tr><td colSpan={8} className="px-4 py-12 text-center text-zinc-500 font-lora italic">Loading...</td></tr>
             ) : sorted.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-12 text-center text-zinc-500 font-lora italic">No members found.</td></tr>
+              <tr><td colSpan={8} className="px-4 py-12 text-center text-zinc-500 font-lora italic">No members found.</td></tr>
             ) : sorted.map((m: any) => (
-              <MemberRow key={m.id} m={m} impersonateMember={impersonateMember} router={router} />
+              <MemberRow key={m.id} m={m} impersonateMember={impersonateMember} router={router} selectedIds={selectedIds} toggleId={toggleId} />
             ))}
           </tbody>
         </table>
       </div>
+      {deleteError && (
+        <div className="fixed bottom-6 right-6 bg-red-700 text-white font-montserrat text-sm font-semibold px-5 py-3 rounded-lg shadow-xl z-50">
+          {deleteError}
+        </div>
+      )}
     </div>
   )
 }

@@ -37,6 +37,34 @@ export async function GET() {
     });
     const memberByCustomer = new Map(members.map(m => [m.stripeCustomerId!, m]));
 
+    // ── Fetch household members for each primary subscriber ─────────────────
+    const householdMembers = await prisma.member.findMany({
+      where: {
+        household: { isNot: null },
+        isHouseholdPrimary: false,
+      },
+      select: {
+        firstName: true,
+        lastName: true,
+        household: { select: { id: true } },
+        user: { select: { email: true } },
+      },
+    });
+
+    // Map household members by their primary's stripeCustomerId
+    const primaries = await prisma.member.findMany({
+      where: { isHouseholdPrimary: true, stripeCustomerId: { not: null } },
+      select: { stripeCustomerId: true, householdId: true },
+    });
+    const householdByCustomer = new Map<string, { firstName: string; lastName: string }[]>();
+    for (const p of primaries) {
+      if (!p.stripeCustomerId || !p.householdId) continue;
+      const deps = householdMembers.filter(hm => hm.household?.id === p.householdId);
+      if (deps.length > 0) {
+        householdByCustomer.set(p.stripeCustomerId, deps.map(d => ({ firstName: d.firstName, lastName: d.lastName })));
+      }
+    }
+
     // ── Pull plan name map: by Stripe price ID AND by subscription ID ───────
     const dbPlans = await prisma.membershipPlan.findMany({
       select: { stripePriceId: true, name: true },
@@ -128,6 +156,15 @@ export async function GET() {
         : s.status === 'trialing' ? 'Trialing'
         : 'Active';
 
+      // Build line items (excluding SITG donation)
+      const lineItems = s.items.data
+        .filter((item: any) => item.price?.id !== SITG_PRICE)
+        .map((item: any) => ({
+          name: planByPriceId.get(item.price?.id) ?? item.price?.nickname ?? 'Add-on',
+          qty: item.quantity ?? 1,
+          unitCents: item.price?.unit_amount ?? 0,
+        }));
+
       return {
         id: s.id,
         memberId: member?.id ?? null,
@@ -138,6 +175,8 @@ export async function GET() {
         nextBilling,
         status,
         cancelAtPeriodEnd: s.cancel_at_period_end,
+        lineItems,
+        householdMembers: householdByCustomer.get(customer.id) ?? [],
       };
     });
 
@@ -166,11 +205,45 @@ export async function GET() {
       } while (chargeCursor);
     } catch { /* non-fatal */ }
 
+    // Free/zero-dollar memberships: active members with no Stripe customer
+    const freeMembers = await prisma.member.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: [
+          { stripeCustomerId: null },
+          { stripeCustomerId: '' },
+        ],
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        source: true,
+        memberships: {
+          where: { status: 'ACTIVE' },
+          include: { plan: { select: { name: true } } },
+          take: 1,
+        },
+      },
+    });
+
+    const freeMemberships = freeMembers.map(m => ({
+      memberId: m.id,
+      name: `${m.firstName} ${m.lastName}`,
+      plan: m.memberships[0]?.plan?.name ?? 'Unknown',
+      source: m.source ?? '',
+    }));
+
+    // Also include $0 subscriptions from Stripe in this list
+    const zeroDollarSubs = rows.filter(r => r.amountCents === 0 && (r.status === 'Active' || r.status === 'Trialing'));
+
     return NextResponse.json({
       recurringRevenueCents,
       ytdCents,
       overdueCents,
-      subscriptions: rows,
+      subscriptions: rows.filter(r => r.amountCents > 0), // exclude $0 from main table
+      freeMemberships,
+      zeroDollarSubs,
     });
   } catch (err) {
     console.error('[api/admin/billing]', err);

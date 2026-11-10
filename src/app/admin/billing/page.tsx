@@ -17,6 +17,24 @@ interface Subscription {
   nextBilling: string | null;
   status: SubStatus;
   cancelAtPeriodEnd: boolean;
+  lineItems: { name: string; qty: number; unitCents: number }[];
+  householdMembers: { firstName: string; lastName: string }[];
+}
+
+interface FreeMember {
+  memberId: string;
+  name: string;
+  plan: string;
+  source: string;
+}
+
+interface ZeroDollarSub {
+  id: string;
+  memberId: string | null;
+  name: string;
+  plan: string;
+  status: SubStatus;
+  nextBilling: string | null;
 }
 
 interface BillingData {
@@ -24,6 +42,8 @@ interface BillingData {
   ytdCents: number;
   overdueCents: number;
   subscriptions: Subscription[];
+  freeMemberships: FreeMember[];
+  zeroDollarSubs: ZeroDollarSub[];
 }
 
 const STATUS_STYLES: Record<SubStatus, string> = {
@@ -77,6 +97,12 @@ export default function BillingPage() {
   const [synced, setSynced] = useState(false);
   const [sortCol, setSortCol] = useState<SortCol>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const toggleRow = (id: string) => setExpandedRows(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   async function load() {
     setLoading(true);
@@ -246,13 +272,24 @@ export default function BillingPage() {
               <SortableHead />
               <tbody className="divide-y divide-zinc-800">
                 {sortedActive.map((s) => (
+                  <>
                   <tr key={s.id} className="hover:bg-zinc-800/40 transition-colors">
                     <td className="px-6 py-4 font-montserrat font-semibold text-white whitespace-nowrap">
-                      {s.memberId ? (
-                        <a href={`/coach/member-view/${s.memberId}`} className="hover:text-red-400 transition-colors">
-                          {s.name}
-                        </a>
-                      ) : s.name}
+                      <div className="flex items-center gap-2">
+                        {(s.householdMembers.length > 0 || s.lineItems.length > 1) && (
+                          <button onClick={() => toggleRow(s.id)} className="text-zinc-500 hover:text-white transition-colors">
+                            {expandedRows.has(s.id) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          </button>
+                        )}
+                        {s.memberId ? (
+                          <a href={`/coach/member-view/${s.memberId}`} className="hover:text-red-400 transition-colors">
+                            {s.name}
+                          </a>
+                        ) : s.name}
+                        {s.householdMembers.length > 0 && (
+                          <span className="text-xs text-zinc-500 font-normal font-lora">+{s.householdMembers.length}</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 font-lora text-zinc-300 whitespace-nowrap">
                       {s.plan}
@@ -277,6 +314,38 @@ export default function BillingPage() {
                       </span>
                     </td>
                   </tr>
+                  {expandedRows.has(s.id) && (
+                    <tr className="bg-zinc-950/60">
+                      <td colSpan={5} className="px-8 py-4 border-b border-zinc-800">
+                        {s.householdMembers.length > 0 && (
+                          <div className="mb-3">
+                            <p className="font-montserrat text-xs uppercase tracking-widest text-zinc-500 mb-2">Household Members</p>
+                            <div className="flex flex-wrap gap-2">
+                              {s.householdMembers.map((hm, i) => (
+                                <span key={i} className="font-montserrat text-xs text-zinc-300 bg-zinc-800 px-2.5 py-1 rounded-full border border-zinc-700">
+                                  {hm.firstName} {hm.lastName}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {s.lineItems.length > 1 && (
+                          <div>
+                            <p className="font-montserrat text-xs uppercase tracking-widest text-zinc-500 mb-2">Line Items</p>
+                            <div className="space-y-1">
+                              {s.lineItems.map((li, i) => (
+                                <div key={i} className="flex items-center justify-between max-w-sm">
+                                  <span className="font-lora text-xs text-zinc-400">{li.name}{li.qty > 1 ? ` ×${li.qty}` : ''}</span>
+                                  <span className="font-montserrat text-xs text-zinc-300">{fmt(li.unitCents * li.qty)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </>
                 ))}
               </tbody>
             </table>
@@ -337,6 +406,63 @@ export default function BillingPage() {
           </div>
         )}
       </div>
+
+      {/* Free / $0 Memberships */}
+      {((data?.freeMemberships?.length ?? 0) + (data?.zeroDollarSubs?.length ?? 0)) > 0 && (
+        <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+            <h2 className="font-montserrat font-bold text-base text-white tracking-wide">
+              Free / $0 Memberships
+            </h2>
+            <span className="text-xs text-zinc-500 font-montserrat">
+              {(data?.freeMemberships?.length ?? 0) + (data?.zeroDollarSubs?.length ?? 0)} members
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800">
+                  {["Member", "Plan", "Source / Status"].map(col => (
+                    <th key={col} className="text-left px-6 py-3 font-montserrat font-bold text-xs uppercase tracking-widest text-zinc-500 whitespace-nowrap">
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800">
+                {data?.zeroDollarSubs?.map(s => (
+                  <tr key={s.id} className="hover:bg-zinc-800/40 transition-colors">
+                    <td className="px-6 py-4 font-montserrat font-semibold text-white whitespace-nowrap">
+                      {s.memberId ? (
+                        <a href={`/coach/member-view/${s.memberId}`} className="hover:text-red-400 transition-colors">{s.name}</a>
+                      ) : s.name}
+                    </td>
+                    <td className="px-6 py-4 font-lora text-zinc-300 whitespace-nowrap">{s.plan}</td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-montserrat font-bold bg-blue-400/15 text-blue-400 border border-blue-400/30">
+                        $0 Stripe Sub
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {data?.freeMemberships?.map(m => (
+                  <tr key={m.memberId} className="hover:bg-zinc-800/40 transition-colors">
+                    <td className="px-6 py-4 font-montserrat font-semibold text-white whitespace-nowrap">
+                      <a href={`/coach/member-view/${m.memberId}`} className="hover:text-red-400 transition-colors">{m.name}</a>
+                    </td>
+                    <td className="px-6 py-4 font-lora text-zinc-300 whitespace-nowrap">{m.plan}</td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-montserrat font-bold bg-zinc-700/40 text-zinc-400 border border-zinc-600/30">
+                        {m.source || 'No subscription'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
